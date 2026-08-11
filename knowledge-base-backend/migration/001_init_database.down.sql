@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS search_logs;
+DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS chat_sessions;
+DROP TABLE IF EXISTS ingest_jobs;
+DROP TABLE IF EXISTS document_chunks;
+DROP TABLE IF EXISTS document_versions;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS file_objects;
+DROP TABLE IF EXISTS knowledge_bases;
