@@ -52,23 +52,23 @@ func CpuCheck(ctx context.Context) (*data.CpuCheckRespData, *terror.Terror) {
 
 	loadPerCore := load5 / float64(cores)
 
-	cpuCheckRespData := &data.CpuCheckRespData{
-		StatusCode: http.StatusOK,
-
-		Status: "OK",
-	}
+	statusCode := http.StatusOK
+	status := "OK"
 
 	if loadPerCore >= loadPerCoreCritical {
-		cpuCheckRespData.StatusCode = http.StatusInternalServerError
-		cpuCheckRespData.Status = "CRITICAL"
+		statusCode = http.StatusInternalServerError
+		status = "CRITICAL"
 	} else if loadPerCore >= loadPerCoreWarning {
-		cpuCheckRespData.StatusCode = http.StatusTooManyRequests
-		cpuCheckRespData.Status = "WARNING"
+		statusCode = http.StatusTooManyRequests
+		status = "WARNING"
 	}
 
-	cpuCheckRespData.Detail = fmt.Sprintf("%s - Load average: %.2f, %.2f, %.2f | Load/core: %.2f | Cores: %d",
-		cpuCheckRespData.Status, load1, load5, load15, loadPerCore, cores,
-	)
+	cpuCheckRespData := &data.CpuCheckRespData{
+		StatusCode: statusCode,
+		Status:     status,
+		Detail: fmt.Sprintf("%s - Load average: %.2f, %.2f, %.2f | Load/core: %.2f | Cores: %d",
+			status, load1, load5, load15, loadPerCore, cores),
+	}
 
 	return cpuCheckRespData, nil
 }
@@ -93,22 +93,23 @@ func RamCheck(ctx context.Context) (*data.RamCheckRespData, *terror.Terror) {
 
 	usedPercent := int(virtualMemoryStat.UsedPercent)
 
-	ramCheckRespData := &data.RamCheckRespData{
-		StatusCode: http.StatusOK,
-
-		Status: "OK",
-	}
+	statusCode := http.StatusOK
+	status := "OK"
 
 	if usedPercent >= 95 {
-		ramCheckRespData.StatusCode = http.StatusInternalServerError
-		ramCheckRespData.Status = "CRITICAL"
+		statusCode = http.StatusInternalServerError
+		status = "CRITICAL"
 	} else if usedPercent >= 90 {
-		ramCheckRespData.StatusCode = http.StatusTooManyRequests
-		ramCheckRespData.Status = "WARNING"
+		statusCode = http.StatusTooManyRequests
+		status = "WARNING"
 	}
 
-	ramCheckRespData.Detail = fmt.Sprintf("%s - Used: %dMB (%dGB) / Total: %dMB (%dGB) | Used: %d%%",
-		ramCheckRespData.Status, usedMB, usedGB, totalMB, totalGB, usedPercent)
+	ramCheckRespData := &data.RamCheckRespData{
+		StatusCode: statusCode,
+		Status:     status,
+		Detail: fmt.Sprintf("%s - Used: %dMB (%dGB) / Total: %dMB (%dGB) | Used: %d%%",
+			status, usedMB, usedGB, totalMB, totalGB, usedPercent),
+	}
 
 	return ramCheckRespData, nil
 }
