@@ -19,7 +19,7 @@ import (
 func HandleListKnowledgeBases(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	keyword := strings.TrimSpace(c.Query("keyword"))
 
@@ -145,7 +145,7 @@ func HandleListKnowledgeBases(c *gin.Context) {
 func HandleGetKnowledgeBase(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	knowledgeBaseId := strings.TrimSpace(c.Param("id"))
 	if knowledgeBaseId == "" {
@@ -172,7 +172,7 @@ func HandleGetKnowledgeBase(c *gin.Context) {
 func HandleCreateKnowledgeBase(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	createKnowledgeBaseRequest := &data.CreateKnowledgeBaseRequest{}
 
@@ -284,7 +284,7 @@ func HandleCreateKnowledgeBase(c *gin.Context) {
 func HandleUpdateKnowledgeBase(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	knowledgeBaseId := strings.TrimSpace(c.Param("id"))
 	if knowledgeBaseId == "" {
@@ -387,7 +387,7 @@ func HandleUpdateKnowledgeBase(c *gin.Context) {
 func HandleDeleteKnowledgeBase(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	knowledgeBaseId := strings.TrimSpace(c.Param("id"))
 	if knowledgeBaseId == "" {

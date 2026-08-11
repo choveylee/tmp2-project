@@ -143,7 +143,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 		if documentVersionDB != nil {
 			fileObjectId := documentVersionDB.FileObjectId
 
-			documentData.CurrentVersion = &data.DocumentVersionData{
+			documentVersionData := &data.DocumentVersionData{
 				VersionId: documentVersionDB.Id,
 
 				DocumentId: documentVersionDB.DocumentId,
@@ -170,6 +170,8 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 				UpdatedAt: documentVersionDB.UpdatedAt.Format(time.RFC3339),
 			}
 
+			documentData.CurrentVersion = documentVersionData
+
 			fileObjectDB, errx := dbmodel.FindFileObject(ctx, fileObjectId)
 			if errx != nil {
 				errMsg := tlog.E(ctx).Err(errx).Msgf("Get document (user id: %s, document id: %s, version id: %s, file object id: %s) err (db find file object %v)",
@@ -180,7 +182,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 			}
 
 			if fileObjectDB != nil {
-				documentData.FileObject = &data.FileObjectData{
+				fileObjectData := &data.FileObjectData{
 					FileObjectId: fileObjectDB.Id,
 
 					BucketName: fileObjectDB.BucketName,
@@ -197,6 +199,8 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 
 					CreatedAt: fileObjectDB.CreatedAt.Format(time.RFC3339),
 				}
+
+				documentData.FileObject = fileObjectData
 			}
 		}
 	}
@@ -241,9 +245,11 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 		documentData.LatestJob = ingestJobData
 	}
 
-	return &data.GetDocumentRespData{
+	getDocumentRespData := &data.GetDocumentRespData{
 		DocumentData: documentData,
-	}, nil
+	}
+
+	return getDocumentRespData, nil
 }
 
 func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId string, scopeType, sourceType int,
@@ -451,7 +457,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		return nil, errx
 	}
 
-	return &data.CreateDocumentRespData{
+	createDocumentRespData := &data.CreateDocumentRespData{
 		DocumentId: documentId,
 
 		VersionId:    versionId,
@@ -463,7 +469,9 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 		ProcessStatus: dbmodel.DocumentProcessStatusUploaded,
 		Status:        dbmodel.DocumentStatusNormal,
-	}, nil
+	}
+
+	return createDocumentRespData, nil
 }
 
 func UpdateDocument(ctx context.Context, userId, documentId string, title, summary string, tags []string, langCode string, status int) *terror.Terror {

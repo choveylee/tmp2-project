@@ -19,7 +19,7 @@ import (
 func HandleListDocuments(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	knowledgeBaseId := strings.TrimSpace(c.Query("knowledge_base_id"))
 
@@ -201,7 +201,7 @@ func HandleListDocuments(c *gin.Context) {
 func HandleGetDocument(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	documentId := strings.TrimSpace(c.Param("id"))
 	if documentId == "" {
@@ -228,7 +228,7 @@ func HandleGetDocument(c *gin.Context) {
 func HandleCreateDocument(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.MaxDocumentUploadSize+constant.MB)
 
@@ -449,7 +449,8 @@ func HandleCreateDocument(c *gin.Context) {
 		return
 	}
 
-	if len(strings.TrimSpace(fileHeader.Filename)) > dbmodel.FileObjectFileNameLen {
+	fileHeader.Filename = strings.TrimSpace(fileHeader.Filename)
+	if len(fileHeader.Filename) > dbmodel.FileObjectFileNameLen {
 		errMsg := tlog.E(ctx).Msgf("Handle create document (file name: %s) err (file name len limit)",
 			fileHeader.Filename)
 
@@ -475,7 +476,7 @@ func HandleCreateDocument(c *gin.Context) {
 func HandleUpdateDocument(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	documentId := strings.TrimSpace(c.Param("id"))
 	if documentId == "" {
@@ -627,7 +628,7 @@ func HandleUpdateDocument(c *gin.Context) {
 func HandleDeleteDocument(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	userId := c.Request.Header.Get("user_id")
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
 	documentId := strings.TrimSpace(c.Param("id"))
 	if documentId == "" {
