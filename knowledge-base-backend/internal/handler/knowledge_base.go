@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -175,6 +176,8 @@ func HandleCreateKnowledgeBase(c *gin.Context) {
 
 	createKnowledgeBaseRequest := &data.CreateKnowledgeBaseRequest{}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.RequestBodyMaxSize)
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		errMsg := tlog.E(ctx).Err(err).Msgf("Handle create knowledge base (body: %s) err (request body read %v)",
@@ -293,6 +296,8 @@ func HandleUpdateKnowledgeBase(c *gin.Context) {
 	}
 
 	updateKnowledgeBaseRequest := &data.UpdateKnowledgeBaseRequest{}
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.RequestBodyMaxSize)
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {

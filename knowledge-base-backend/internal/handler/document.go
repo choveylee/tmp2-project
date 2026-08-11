@@ -488,6 +488,8 @@ func HandleUpdateDocument(c *gin.Context) {
 
 	updateDocumentRequest := &data.UpdateDocumentRequest{}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.RequestBodyMaxSize)
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		errMsg := tlog.E(ctx).Err(err).Msgf("Handle update document (body: %s) err (request body read %v)",

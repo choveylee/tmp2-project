@@ -14,6 +14,10 @@ const (
 )
 
 const (
+	RequestBodyMaxSize int64 = 20 * MB
+)
+
+const (
 	MaxPageNum  = 100
 	MaxPageSize = 100
 )
