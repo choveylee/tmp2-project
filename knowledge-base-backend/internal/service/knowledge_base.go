@@ -28,6 +28,7 @@ func ListKnowledgeBases(ctx context.Context, userId string, keyword string, visi
 		Total: total,
 	}
 
+	// Service converts DB records into API response DTOs.
 	for _, knowledgeBaseDB := range knowledgeBasesDB {
 		knowledgeBaseData := &data.KnowledgeBaseData{
 			KnowledgeBaseId: knowledgeBaseDB.Id,
@@ -94,6 +95,7 @@ func GetKnowledgeBase(ctx context.Context, userId string, knowledgeBaseId string
 }
 
 func CreateKnowledgeBase(ctx context.Context, userId string, code, name string, description string, visible, status int) (*data.CreateKnowledgeBaseRespData, *terror.Terror) {
+	// Check code uniqueness before create; the DB unique index still protects concurrency.
 	knowledgeBaseDB, errx := dbmodel.FindKnowledgeBaseByCode(ctx, code)
 	if errx != nil {
 		errMsg := tlog.E(ctx).Err(errx).Msgf("Create knowledge base (user id: %s, code: %s, name: %s, description: %s, visible: %d, status: %d) err (db find knowledge base by code %v)",

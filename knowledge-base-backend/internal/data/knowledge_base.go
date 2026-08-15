@@ -11,8 +11,7 @@ type KnowledgeBaseData struct {
 	Description string `json:"description"`
 
 	Visible int `json:"visible"`
-
-	Status int `json:"status"`
+	Status  int `json:"status"`
 
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -35,8 +34,7 @@ type GetKnowledgeBaseRespData struct {
 	Description string `json:"description"`
 
 	Visible int `json:"visible"`
-
-	Status int `json:"status"`
+	Status  int `json:"status"`
 
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -50,8 +48,7 @@ type CreateKnowledgeBaseRequest struct {
 	Description string `json:"description"`
 
 	Visible int `json:"visible"`
-
-	Status int `json:"status"`
+	Status  int `json:"status"`
 }
 
 type CreateKnowledgeBaseRespData struct {
@@ -64,6 +61,5 @@ type UpdateKnowledgeBaseRequest struct {
 	Description string `json:"description"`
 
 	Visible int `json:"visible"`
-
-	Status int `json:"status"`
+	Status  int `json:"status"`
 }

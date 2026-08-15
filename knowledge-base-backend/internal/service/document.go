@@ -34,7 +34,7 @@ func ListDocuments(ctx context.Context, userId, knowledgeBaseId, keyword string,
 		Total: total,
 	}
 
-	// 列表接口只返回文档主表信息，避免每条记录再查版本和文件对象。
+	// List responses include only document table data to avoid N+1 version/file queries.
 	for _, documentDB := range documentsDB {
 		tags := make([]string, 0)
 
@@ -104,7 +104,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 
 	curVersionId := documentDB.CurVersionId
 
-	// 先组装文档主信息，后面再按当前版本补齐文件和任务信息。
+	// Build the main document payload first, then enrich it with current version details.
 	documentData := &data.DocumentData{
 		DocumentId: documentDB.Id,
 
@@ -133,7 +133,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 	}
 
 	if curVersionId != "" {
-		// 详情页需要展示当前版本及对应原始文件信息。
+		// Detail responses include the current version and its original file object.
 		documentVersionDB, errx := dbmodel.FindDocumentVersion(ctx, curVersionId)
 		if errx != nil {
 			errMsg := tlog.E(ctx).Err(errx).Msgf("Get document (user id: %s, document id: %s, version id: %s) err (db find document version %v)",
@@ -208,7 +208,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 		}
 	}
 
-	// 解析任务是异步执行的，详情里只展示当前版本最近一次任务状态。
+	// Ingest jobs run asynchronously, so expose only the latest job for the current version.
 	ingestJobDB, errx := dbmodel.FindLatestIngestJob(ctx, documentId, curVersionId)
 	if errx != nil {
 		errMsg := tlog.E(ctx).Err(errx).Msgf("Get document (user id: %s, document id: %s, version id: %s) err (db find latest ingest job %v)",
@@ -262,7 +262,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 	fileSize := fileHeader.Size
 
 	if scopeType == dbmodel.DocumentScopeTypeKnowledge {
-		// 知识库文档必须先确认知识库存在，附件文档不依赖 knowledge_base_id。
+		// Knowledge documents must reference an existing knowledge base; attachments do not.
 		knowledgeBaseDB, errx := dbmodel.FindKnowledgeBase(ctx, knowledgeBaseId)
 		if errx != nil {
 			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db find knowledge base %v)",
@@ -312,7 +312,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		ocrStatus = dbmodel.DocumentVersionOcrStatusPending
 	}
 
-	// 第一段事务只创建数据库占位记录，先拿到 document/version/file_object 的业务 ID。
+	// The first transaction creates placeholder records so document/version/file IDs are available.
 	var errx *terror.Terror
 
 	var documentDB *dbmodel.Document
@@ -383,7 +383,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 	objectFileName := fileObjectId + "." + fileExt
 
-	// 对象存储文件名使用系统生成 ID，原始文件名只保存在数据库里用于展示。
+	// Object storage names use generated IDs; the original filename stays in DB for display.
 	objectKey := lib.BuildAwsS3RawObjectKey(knowledgeBaseId, chatSessionId, documentId, versionId, objectFileName, time.Now())
 
 	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, objectFileName, fileHeader)
@@ -392,7 +392,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, objectFileName, originFileName, fileSize, errx)
 		errx.AttachErrMsg(errMsg)
 
-		// 上传失败时只做单条状态回写，不额外包事务。
+		// Upload failure only needs one status update, so avoid wrapping it in a transaction.
 		errx2 := dbmodel.UpdateDocumentProcessStatus(ctx, documentId, dbmodel.DocumentProcessStatusFailed)
 		if errx2 != nil {
 			errMsg := tlog.E(ctx).Err(errx2).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, file name: %s, file size: %d) err (db mark document upload failed %v)",
@@ -412,7 +412,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 	var ingestJobDB *dbmodel.IngestJob
 
-	// 第二段事务补齐存储信息，并创建后续解析任务。
+	// The second transaction completes storage metadata and creates the async parse job.
 	err = dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
 		errx = dbmodel.UpdateFileObjectStorageInfoTx(ctx, tx, fileObjectId, objectKey, sha256Value)
 		if errx != nil {
@@ -538,7 +538,7 @@ func DeleteDocument(ctx context.Context, userId string, documentId string) *terr
 		return errx
 	}
 
-	// 删除需要先禁用业务状态，再软删除记录，二者需要一起提交或回滚。
+	// Delete disables business status and soft-deletes the row atomically.
 	err := dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
 		errx = dbmodel.DisableDocumentTx(ctx, tx, documentId)
 		if errx != nil {

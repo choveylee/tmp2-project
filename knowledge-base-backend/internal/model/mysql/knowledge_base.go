@@ -56,8 +56,7 @@ type KnowledgeBase struct {
 	Description string
 
 	Visible int
-
-	Status int
+	Status  int
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -80,8 +79,7 @@ func CreateKnowledgeBase(ctx context.Context, code, name string, ownerId string,
 		Description: description,
 
 		Visible: visible,
-
-		Status: status,
+		Status:  status,
 	}
 
 	retGorm := DB(ctx).Create(knowledgeBaseDB)
@@ -190,8 +188,7 @@ func UpdateKnowledgeBase(ctx context.Context, knowledgeBaseId string, name strin
 		"description": description,
 
 		"visible": visible,
-
-		"status": status,
+		"status":  status,
 
 		"updated_at": time.Now(),
 	}

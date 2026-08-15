@@ -86,6 +86,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 		return errx
 	}
 
+	// SeaweedFS is S3-compatible, so initialize the AWS SDK client with static credentials.
 	awsConfig, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(awsS3Region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsS3AccessKey, awsS3SecretKey, "")),
@@ -99,6 +100,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 		return errx
 	}
 
+	// Use the internal endpoint for uploads and endpoint2 for externally reachable URLs.
 	awsS3Client = s3.NewFromConfig(awsConfig, func(options *s3.Options) {
 		options.BaseEndpoint = aws.String(awsS3Endpoint)
 		options.UsePathStyle = true
@@ -117,6 +119,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
+	// Check bucket access during startup to surface object-storage config issues early.
 	_, err = awsS3Client.HeadBucket(checkCtx, &s3.HeadBucketInput{
 		Bucket: aws.String(awsS3Bucket),
 	})

@@ -109,6 +109,7 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 
 	hash := sha256.New()
 
+	// Stream once to compute sha256 without loading large files fully into memory.
 	_, err = io.Copy(hash, file)
 	if err != nil {
 		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (copy file %v)",
@@ -119,6 +120,7 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 		return "", errx
 	}
 
+	// After hashing, the file cursor is at EOF and must be rewound before upload.
 	_, err = file.Seek(0, io.SeekStart)
 	if err != nil {
 		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (seek file %v)",
@@ -129,6 +131,7 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 		return "", errx
 	}
 
+	// Pass the multipart file stream directly to the S3 SDK for upload.
 	putObjectInput := &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(objectKey),
