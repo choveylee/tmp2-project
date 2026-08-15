@@ -37,7 +37,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// init migrations
+	// 启动时先执行数据库迁移，确保表结构已准备好。
 	errx := runMigrate(ctx)
 	if errx != nil {
 		tlog.E(ctx).Err(errx).Msg("service startup failed during database migration")
@@ -45,7 +45,7 @@ func main() {
 		return
 	}
 
-	// init lib
+	// 初始化对象存储等外部依赖客户端。
 	errx = lib.InitLib(ctx)
 	if errx != nil {
 		tlog.E(ctx).Err(errx).Msg("service startup failed during shared library initialization")
@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 
-	// init model
+	// 初始化数据库、缓存等模型层依赖。
 	errx = model.InitModel(ctx)
 	if errx != nil {
 		tlog.E(ctx).Err(errx).Msg("service startup failed during model initialization")
@@ -61,7 +61,7 @@ func main() {
 		return
 	}
 
-	// init cron
+	// 初始化并启动后台定时任务。
 	errx = crontab.InitCron(ctx)
 	if errx != nil {
 		tlog.E(ctx).Err(errx).Msg("service startup failed during cron configuration initialization")
@@ -76,7 +76,7 @@ func main() {
 		return
 	}
 
-	// init service
+	// 初始化业务服务层。
 	errx = service.InitService(ctx)
 	if errx != nil {
 		tlog.E(ctx).Err(errx).Msg("service startup failed during service initialization")
@@ -244,9 +244,7 @@ func waitForTcpDial(ctx context.Context, port int, timeout time.Duration) error 
 	return fmt.Errorf("timed out waiting for the TCP listener at %s", address)
 }
 
-// resolvePingBaseUrl aligns the health probe base URL with the configured HTTP port.
-// When the configured host is empty or points to a loopback address, the function uses
-// httpPort so that changing HTTP_PORT does not require a separate ping-host update.
+// 本地探活地址跟随 HTTP_PORT，避免只改端口后探活仍打到旧地址。
 func resolvePingBaseUrl(httpPort int) string {
 	serverPingHost := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("SERVER_PING_HOST"), ""))
 	if serverPingHost == "" {

@@ -84,7 +84,7 @@ func CreateKnowledgeBase(ctx context.Context, code, name string, ownerId string,
 		Status: status,
 	}
 
-	retGorm := serverClient.DB(ctx, runMode).Create(knowledgeBaseDB)
+	retGorm := DB(ctx).Create(knowledgeBaseDB)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create knowledge base (code: %s, name: %s, owner id: %s, description: %s, visible: %d, status: %d) err (db create %v)",
 			code, name, ownerId, description, visible, status, retGorm.Error)
@@ -100,7 +100,7 @@ func CreateKnowledgeBase(ctx context.Context, code, name string, ownerId string,
 func FindKnowledgeBase(ctx context.Context, knowledgeBaseId string) (*KnowledgeBase, *terror.Terror) {
 	knowledgeBasesDB := make([]*KnowledgeBase, 0)
 
-	retGorm := serverClient.DB(ctx, runMode).Where("id = ?", knowledgeBaseId).Limit(1).Find(&knowledgeBasesDB)
+	retGorm := DB(ctx).Where("id = ?", knowledgeBaseId).Limit(1).Find(&knowledgeBasesDB)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Find knowledge base (id: %s) err (db find %v)",
 			knowledgeBaseId, retGorm.Error)
@@ -120,7 +120,7 @@ func FindKnowledgeBase(ctx context.Context, knowledgeBaseId string) (*KnowledgeB
 func FindKnowledgeBaseByCode(ctx context.Context, code string) (*KnowledgeBase, *terror.Terror) {
 	knowledgeBasesDB := make([]*KnowledgeBase, 0)
 
-	retGorm := serverClient.DB(ctx, runMode).Where("code = ?", code).Limit(1).Find(&knowledgeBasesDB)
+	retGorm := DB(ctx).Where("code = ?", code).Limit(1).Find(&knowledgeBasesDB)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Find knowledge base (code: %s) err (db find %v)",
 			code, retGorm.Error)
@@ -138,10 +138,10 @@ func FindKnowledgeBaseByCode(ctx context.Context, code string) (*KnowledgeBase, 
 }
 
 func FindKnowledgeBases(ctx context.Context, keyword string, visible, status int, pageNum, pageSize int) (int64, []*KnowledgeBase, *terror.Terror) {
-	query := serverClient.DB(ctx, runMode)
+	query := DB(ctx)
 
 	if keyword != "" {
-		query = query.Where("code like ? OR name like ?", "%"+keyword+"%", "%"+keyword+"%")
+		query = query.Where("(code like ? OR name like ?)", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
 	if visible != -1 {
@@ -196,7 +196,7 @@ func UpdateKnowledgeBase(ctx context.Context, knowledgeBaseId string, name strin
 		"updated_at": time.Now(),
 	}
 
-	retGorm := serverClient.DB(ctx, runMode).Model(&KnowledgeBase{}).Where("id = ?", knowledgeBaseId).Updates(params)
+	retGorm := DB(ctx).Model(&KnowledgeBase{}).Where("id = ?", knowledgeBaseId).Updates(params)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update knowledge base (id: %s, name: %s, description: %s, visible: %d, status: %d) err (db updates %v)",
 			knowledgeBaseId, name, description, visible, status, retGorm.Error)
@@ -210,7 +210,7 @@ func UpdateKnowledgeBase(ctx context.Context, knowledgeBaseId string, name strin
 }
 
 func DeleteKnowledgeBase(ctx context.Context, knowledgeBaseId string) *terror.Terror {
-	retGorm := serverClient.DB(ctx, runMode).Where("id = ?", knowledgeBaseId).Delete(&KnowledgeBase{})
+	retGorm := DB(ctx).Where("id = ?", knowledgeBaseId).Delete(&KnowledgeBase{})
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Delete knowledge base (id: %s) err (db delete %v)",
 			knowledgeBaseId, retGorm.Error)

@@ -102,7 +102,7 @@ type Document struct {
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at"`
 }
 
-func CreateDocument(ctx context.Context, tx *gorm.DB, knowledgeBaseId, chatSessionId string, scopeType, sourceType int,
+func CreateDocumentTx(ctx context.Context, tx *gorm.DB, knowledgeBaseId, chatSessionId string, scopeType, sourceType int,
 	title, summary string, tags []string, ownerId, langCode string, curVersionNo uint, curVersionId string, processStatus, status int) (*Document, *terror.Terror) {
 	documentDB := &Document{
 		Id: tutil.NewOid().String(),
@@ -130,8 +130,8 @@ func CreateDocument(ctx context.Context, tx *gorm.DB, knowledgeBaseId, chatSessi
 
 	retGorm := tx.Create(documentDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create document (id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, cur version no: %d, cur version id: %s, process status: %d, status: %d) err (db create %v)",
-			documentDB.Id, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, curVersionNo, curVersionId, processStatus, status, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create document (tx: %p, id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, cur version no: %d, cur version id: %s, process status: %d, status: %d) err (db create %v)",
+			tx, documentDB.Id, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, curVersionNo, curVersionId, processStatus, status, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -144,7 +144,7 @@ func CreateDocument(ctx context.Context, tx *gorm.DB, knowledgeBaseId, chatSessi
 func FindDocument(ctx context.Context, documentId string) (*Document, *terror.Terror) {
 	documentsDB := make([]*Document, 0)
 
-	retGorm := serverClient.DB(ctx, runMode).Where("id = ?", documentId).Limit(1).Find(&documentsDB)
+	retGorm := DB(ctx).Where("id = ?", documentId).Limit(1).Find(&documentsDB)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Find document (id: %s) err (db find %v)",
 			documentId, retGorm.Error)
@@ -162,14 +162,14 @@ func FindDocument(ctx context.Context, documentId string) (*Document, *terror.Te
 }
 
 func FindDocuments(ctx context.Context, knowledgeBaseId, keyword string, scopeType, sourceType, processStatus, status int, pageNum, pageSize int) (int64, []*Document, *terror.Terror) {
-	query := serverClient.DB(ctx, runMode).Model(&Document{})
+	query := DB(ctx).Model(&Document{})
 
 	if knowledgeBaseId != "" {
 		query = query.Where("knowledge_base_id = ?", knowledgeBaseId)
 	}
 
 	if keyword != "" {
-		query = query.Where("title LIKE ? OR summary LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+		query = query.Where("(title LIKE ? OR summary LIKE ?)", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
 	if scopeType != -1 {
@@ -233,7 +233,7 @@ func UpdateDocument(ctx context.Context, documentId string, title, summary strin
 		"updated_at": time.Now(),
 	}
 
-	retGorm := serverClient.DB(ctx, runMode).Model(&Document{}).Where("id = ?", documentId).Updates(params)
+	retGorm := DB(ctx).Model(&Document{}).Where("id = ?", documentId).Updates(params)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document (id: %s, title: %s, summary: %s, tags: %v, lang code: %s, status: %d) err (db updates %v)",
 			documentId, title, summary, tags, langCode, status, retGorm.Error)
@@ -246,7 +246,7 @@ func UpdateDocument(ctx context.Context, documentId string, title, summary strin
 	return nil
 }
 
-func DisableDocument(ctx context.Context, tx *gorm.DB, documentId string) *terror.Terror {
+func DisableDocumentTx(ctx context.Context, tx *gorm.DB, documentId string) *terror.Terror {
 	params := map[string]any{
 		"status": DocumentStatusDisabled,
 
@@ -255,8 +255,8 @@ func DisableDocument(ctx context.Context, tx *gorm.DB, documentId string) *terro
 
 	retGorm := tx.Model(&Document{}).Where("id = ?", documentId).Updates(params)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Disable document (id: %s) err (db updates %v)",
-			documentId, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Disable document (tx: %p, id: %s) err (db updates %v)",
+			tx, documentId, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -266,7 +266,7 @@ func DisableDocument(ctx context.Context, tx *gorm.DB, documentId string) *terro
 	return nil
 }
 
-func UpdateDocumentCurrentVersion(ctx context.Context, tx *gorm.DB, documentId string, curVersionNo uint, curVersionId string) *terror.Terror {
+func UpdateDocumentCurrentVersionTx(ctx context.Context, tx *gorm.DB, documentId string, curVersionNo uint, curVersionId string) *terror.Terror {
 	params := map[string]any{
 		"cur_version_no": curVersionNo,
 		"cur_version_id": curVersionId,
@@ -276,8 +276,8 @@ func UpdateDocumentCurrentVersion(ctx context.Context, tx *gorm.DB, documentId s
 
 	retGorm := tx.Model(&Document{}).Where("id = ?", documentId).Updates(params)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document current version (id: %s, cur version no: %d, cur version id: %s) err (db updates %v)",
-			documentId, curVersionNo, curVersionId, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document current version (tx: %p, id: %s, cur version no: %d, cur version id: %s) err (db updates %v)",
+			tx, documentId, curVersionNo, curVersionId, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -287,14 +287,14 @@ func UpdateDocumentCurrentVersion(ctx context.Context, tx *gorm.DB, documentId s
 	return nil
 }
 
-func UpdateDocumentProcessStatus(ctx context.Context, tx *gorm.DB, documentId string, processStatus int) *terror.Terror {
+func UpdateDocumentProcessStatus(ctx context.Context, documentId string, processStatus int) *terror.Terror {
 	params := map[string]any{
 		"process_status": processStatus,
 
 		"updated_at": time.Now(),
 	}
 
-	retGorm := tx.Model(&Document{}).Where("id = ?", documentId).Updates(params)
+	retGorm := DB(ctx).Model(&Document{}).Where("id = ?", documentId).Updates(params)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document process status (id: %s, process status: %d) err (db updates %v)",
 			documentId, processStatus, retGorm.Error)
@@ -307,10 +307,30 @@ func UpdateDocumentProcessStatus(ctx context.Context, tx *gorm.DB, documentId st
 	return nil
 }
 
-func DeleteDocument(ctx context.Context, tx *gorm.DB, documentId string) *terror.Terror {
+func UpdateDocumentProcessStatusTx(ctx context.Context, tx *gorm.DB, documentId string, processStatus int) *terror.Terror {
+	params := map[string]any{
+		"process_status": processStatus,
+
+		"updated_at": time.Now(),
+	}
+
+	retGorm := tx.Model(&Document{}).Where("id = ?", documentId).Updates(params)
+	if retGorm.Error != nil {
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document process status (tx: %p, id: %s, process status: %d) err (db updates %v)",
+			tx, documentId, processStatus, retGorm.Error)
+
+		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+
+		return errx
+	}
+
+	return nil
+}
+
+func DeleteDocumentTx(ctx context.Context, tx *gorm.DB, documentId string) *terror.Terror {
 	retGorm := tx.Where("id = ?", documentId).Delete(&Document{})
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Delete document (id: %s) err (db delete %v)",
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Delete document tx (id: %s) err (db delete %v)",
 			documentId, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)

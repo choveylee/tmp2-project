@@ -56,7 +56,7 @@ func (*IngestJob) TableName() string {
 	return "ingest_jobs"
 }
 
-func CreateIngestJob(ctx context.Context, tx *gorm.DB, documentId, versionId string, jobType, jobStatus int, retryCount uint, workerName, errorMessage, payload string) (*IngestJob, *terror.Terror) {
+func CreateIngestJobTx(ctx context.Context, tx *gorm.DB, documentId, versionId string, jobType, jobStatus int, retryCount uint, workerName, errorMessage, payload string) (*IngestJob, *terror.Terror) {
 	ingestJobDB := &IngestJob{
 		Id: tutil.NewOid().String(),
 
@@ -75,8 +75,8 @@ func CreateIngestJob(ctx context.Context, tx *gorm.DB, documentId, versionId str
 
 	retGorm := tx.Create(ingestJobDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create ingest job (id: %s, document id: %s, version id: %s, job type: %d, job status: %d, retry count: %d, worker name: %s, error message: %s, payload: %s) err (db create %v)",
-			ingestJobDB.Id, documentId, versionId, jobType, jobStatus, retryCount, workerName, errorMessage, payload, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create ingest job (tx: %p, id: %s, document id: %s, version id: %s, job type: %d, job status: %d, retry count: %d, worker name: %s, error message: %s, payload: %s) err (db create %v)",
+			tx, ingestJobDB.Id, documentId, versionId, jobType, jobStatus, retryCount, workerName, errorMessage, payload, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -89,7 +89,8 @@ func CreateIngestJob(ctx context.Context, tx *gorm.DB, documentId, versionId str
 func FindLatestIngestJob(ctx context.Context, documentId string, versionId string) (*IngestJob, *terror.Terror) {
 	ingestJobsDB := make([]*IngestJob, 0)
 
-	query := serverClient.DB(ctx, runMode).Where("document_id = ?", documentId)
+	query := DB(ctx).Where("document_id = ?", documentId)
+
 	if versionId != "" {
 		query = query.Where("version_id = ?", versionId)
 	}

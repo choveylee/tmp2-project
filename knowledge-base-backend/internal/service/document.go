@@ -34,6 +34,7 @@ func ListDocuments(ctx context.Context, userId, knowledgeBaseId, keyword string,
 		Total: total,
 	}
 
+	// 列表接口只返回文档主表信息，避免每条记录再查版本和文件对象。
 	for _, documentDB := range documentsDB {
 		tags := make([]string, 0)
 
@@ -103,6 +104,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 
 	curVersionId := documentDB.CurVersionId
 
+	// 先组装文档主信息，后面再按当前版本补齐文件和任务信息。
 	documentData := &data.DocumentData{
 		DocumentId: documentDB.Id,
 
@@ -131,6 +133,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 	}
 
 	if curVersionId != "" {
+		// 详情页需要展示当前版本及对应原始文件信息。
 		documentVersionDB, errx := dbmodel.FindDocumentVersion(ctx, curVersionId)
 		if errx != nil {
 			errMsg := tlog.E(ctx).Err(errx).Msgf("Get document (user id: %s, document id: %s, version id: %s) err (db find document version %v)",
@@ -205,6 +208,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 		}
 	}
 
+	// 解析任务是异步执行的，详情里只展示当前版本最近一次任务状态。
 	ingestJobDB, errx := dbmodel.FindLatestIngestJob(ctx, documentId, curVersionId)
 	if errx != nil {
 		errMsg := tlog.E(ctx).Err(errx).Msgf("Get document (user id: %s, document id: %s, version id: %s) err (db find latest ingest job %v)",
@@ -258,6 +262,7 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 	fileSize := fileHeader.Size
 
 	if scopeType == dbmodel.DocumentScopeTypeKnowledge {
+		// 知识库文档必须先确认知识库存在，附件文档不依赖 knowledge_base_id。
 		knowledgeBaseDB, errx := dbmodel.FindKnowledgeBase(ctx, knowledgeBaseId)
 		if errx != nil {
 			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db find knowledge base %v)",
@@ -277,13 +282,11 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		}
 	}
 
-	safeFileName := lib.SanitizeAwsS3FileName(originFileName)
-
 	if title == "" {
 		title = strings.TrimSpace(strings.TrimSuffix(originFileName, path.Ext(originFileName)))
 	}
 	if title == "" {
-		title = safeFileName
+		title = "unnamed"
 	}
 
 	bucketName := lib.AwsS3Bucket()
@@ -300,15 +303,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 	if len(fileExt) > dbmodel.FileObjectFileExtLen {
 		fileExt = fileExt[:dbmodel.FileObjectFileExtLen]
 	}
-
-	ownerId = strings.TrimSpace(ownerId)
-	if ownerId == "" {
-		ownerId = constant.DefaultAnonymousOwnerId
-	}
-
-	langCode = strings.TrimSpace(langCode)
-	if langCode == "" {
-		langCode = constant.DefaultDocumentLangCode
+	if fileExt == "" {
+		fileExt = "bin"
 	}
 
 	ocrStatus := dbmodel.DocumentVersionOcrStatusNotRequired
@@ -316,7 +312,9 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		ocrStatus = dbmodel.DocumentVersionOcrStatusPending
 	}
 
-	var dbErrx *terror.Terror
+	// 第一段事务只创建数据库占位记录，先拿到 document/version/file_object 的业务 ID。
+	var errx *terror.Terror
+
 	var documentDB *dbmodel.Document
 	var documentVersionDB *dbmodel.DocumentVersion
 	var fileObjectDB *dbmodel.FileObject
@@ -326,41 +324,53 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 	fileObjectId := ""
 
 	err := dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		documentDB, dbErrx = dbmodel.CreateDocument(ctx, tx, knowledgeBaseId, chatSessionId, scopeType, sourceType,
+		documentDB, errx = dbmodel.CreateDocumentTx(ctx, tx, knowledgeBaseId, chatSessionId, scopeType, sourceType,
 			title, summary, tags, ownerId, langCode, 0, "", dbmodel.DocumentProcessStatusWaiting, dbmodel.DocumentStatusNormal)
-		if dbErrx != nil {
-			return dbErrx
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 		documentId = documentDB.Id
 
-		fileObjectDB, dbErrx = dbmodel.CreateFileObject(ctx, tx, bucketName, "", originFileName, mimeType, fileExt,
+		fileObjectDB, errx = dbmodel.CreateFileObjectTx(ctx, tx, bucketName, "", originFileName, mimeType, fileExt,
 			uint64(fileSize), "", dbmodel.FileObjectStorageProviderSeaweedFS)
-		if dbErrx != nil {
-			return dbErrx
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 		fileObjectId = fileObjectDB.Id
 
-		documentVersionDB, dbErrx = dbmodel.CreateDocumentVersion(ctx, tx, documentId, 1, fileObjectId, parseStrategy,
+		documentVersionDB, errx = dbmodel.CreateDocumentVersionTx(ctx, tx, documentId, 1, fileObjectId, parseStrategy,
 			dbmodel.DocumentParserTypeUnknown, "", 0, 0, 0, dbmodel.DocumentVersionParseStatusPending, "", ocrStatus, "")
-		if dbErrx != nil {
-			return dbErrx
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, fileObjectId, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 		versionId = documentVersionDB.Id
 
-		dbErrx = dbmodel.UpdateDocumentCurrentVersion(ctx, tx, documentId, documentVersionDB.VersionNo, versionId)
-		if dbErrx != nil {
-			return dbErrx
+		errx = dbmodel.UpdateDocumentCurrentVersionTx(ctx, tx, documentId, documentVersionDB.VersionNo, versionId)
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
 		return nil
 	})
 	if err != nil {
-		if dbErrx != nil {
-			errMsg := tlog.E(ctx).Err(dbErrx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, originFileName, fileSize, dbErrx)
-			dbErrx.AttachErrMsg(errMsg)
-
-			return nil, dbErrx
+		if errx != nil {
+			return nil, errx
 		}
 
 		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
@@ -371,32 +381,23 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		return nil, errx
 	}
 
-	objectKey := lib.BuildAwsS3RawObjectKey(knowledgeBaseId, chatSessionId, documentId, versionId, fileObjectId, safeFileName, time.Now())
+	objectFileName := fileObjectId + "." + fileExt
 
-	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, safeFileName, fileHeader)
+	// 对象存储文件名使用系统生成 ID，原始文件名只保存在数据库里用于展示。
+	objectKey := lib.BuildAwsS3RawObjectKey(knowledgeBaseId, chatSessionId, documentId, versionId, objectFileName, time.Now())
+
+	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, objectFileName, fileHeader)
 	if errx != nil {
-		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, file name: %s, file size: %d) err (lib upload aws s3 file %v)",
-			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, originFileName, fileSize, errx)
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (lib upload aws s3 file %v)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, objectFileName, originFileName, fileSize, errx)
 		errx.AttachErrMsg(errMsg)
 
-		dbErrx = nil
-		err = dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
-			dbErrx = dbmodel.UpdateDocumentProcessStatus(ctx, tx, documentId, dbmodel.DocumentProcessStatusFailed)
-			if dbErrx != nil {
-				return dbErrx
-			}
-
-			return nil
-		})
-		if err != nil {
-			if dbErrx != nil {
-				errMsg = tlog.E(ctx).Err(dbErrx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, file name: %s, file size: %d) err (db mark document upload failed %v)",
-					userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, originFileName, fileSize, dbErrx)
-				dbErrx.AttachErrMsg(errMsg)
-			} else {
-				_ = tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, file name: %s, file size: %d) err (db mark document upload failed %v)",
-					userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, originFileName, fileSize, err)
-			}
+		// 上传失败时只做单条状态回写，不额外包事务。
+		errx2 := dbmodel.UpdateDocumentProcessStatus(ctx, documentId, dbmodel.DocumentProcessStatusFailed)
+		if errx2 != nil {
+			errMsg := tlog.E(ctx).Err(errx2).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, file name: %s, file size: %d) err (db mark document upload failed %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, originFileName, fileSize, errx2)
+			errx2.AttachErrMsg(errMsg)
 		}
 
 		return nil, errx
@@ -411,42 +412,55 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 	var ingestJobDB *dbmodel.IngestJob
 
+	// 第二段事务补齐存储信息，并创建后续解析任务。
 	err = dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		dbErrx = dbmodel.UpdateFileObjectStorageInfo(ctx, tx, fileObjectId, objectKey, sha256Value)
-		if dbErrx != nil {
-			return dbErrx
+		errx = dbmodel.UpdateFileObjectStorageInfoTx(ctx, tx, fileObjectId, objectKey, sha256Value)
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update file object storage info %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
-		dbErrx = dbmodel.UpdateDocumentVersionContentSha256(ctx, tx, versionId, sha256Value)
-		if dbErrx != nil {
-			return dbErrx
+		errx = dbmodel.UpdateDocumentVersionContentSha256Tx(ctx, tx, versionId, sha256Value)
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document version content sha256 %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
-		dbErrx = dbmodel.UpdateDocumentProcessStatus(ctx, tx, documentId, dbmodel.DocumentProcessStatusUploaded)
-		if dbErrx != nil {
-			return dbErrx
+		errx = dbmodel.UpdateDocumentProcessStatusTx(ctx, tx, documentId, dbmodel.DocumentProcessStatusUploaded)
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document process status %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
-		ingestJobDB, dbErrx = dbmodel.CreateIngestJob(ctx, tx, documentId, versionId, dbmodel.IngestJobTypeParse,
+		ingestJobDB, errx = dbmodel.CreateIngestJobTx(ctx, tx, documentId, versionId, dbmodel.IngestJobTypeParse,
 			dbmodel.IngestJobStatusPending, 0, "", "", jobPayload)
-		if dbErrx != nil {
-			return dbErrx
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db create ingest job %v)",
+				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
 		return nil
 	})
 	if err != nil {
+		if errx != nil {
+			return nil, errx
+		}
+
 		jobId := ""
 		if ingestJobDB != nil {
 			jobId = ingestJobDB.Id
-		}
-
-		if dbErrx != nil {
-			errMsg := tlog.E(ctx).Err(dbErrx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db complete document upload transaction %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, jobId, bucketName, objectKey, sha256Value, originFileName, fileSize, dbErrx)
-			dbErrx.AttachErrMsg(errMsg)
-
-			return nil, dbErrx
 		}
 
 		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db complete document upload transaction %v)",
@@ -524,28 +538,31 @@ func DeleteDocument(ctx context.Context, userId string, documentId string) *terr
 		return errx
 	}
 
-	var dbErrx *terror.Terror
-
+	// 删除需要先禁用业务状态，再软删除记录，二者需要一起提交或回滚。
 	err := dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		dbErrx = dbmodel.DisableDocument(ctx, tx, documentId)
-		if dbErrx != nil {
-			return dbErrx
+		errx = dbmodel.DisableDocumentTx(ctx, tx, documentId)
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Delete document tx (user id: %s, document id: %s) err (db transaction %v)",
+				userId, documentId, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
-		dbErrx = dbmodel.DeleteDocument(ctx, tx, documentId)
-		if dbErrx != nil {
-			return dbErrx
+		errx = dbmodel.DeleteDocumentTx(ctx, tx, documentId)
+		if errx != nil {
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Delete document tx (user id: %s, document id: %s) err (db transaction %v)",
+				userId, documentId, errx)
+			errx.AttachErrMsg(errMsg)
+
+			return errx
 		}
 
 		return nil
 	})
 	if err != nil {
-		if dbErrx != nil {
-			errMsg := tlog.E(ctx).Err(dbErrx).Msgf("Delete document (user id: %s, document id: %s) err (db transaction %v)",
-				userId, documentId, dbErrx)
-			dbErrx.AttachErrMsg(errMsg)
-
-			return dbErrx
+		if errx != nil {
+			return errx
 		}
 
 		errMsg := tlog.E(ctx).Err(err).Msgf("Delete document (user id: %s, document id: %s) err (db transaction %v)",

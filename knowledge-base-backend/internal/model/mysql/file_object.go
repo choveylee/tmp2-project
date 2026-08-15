@@ -48,7 +48,7 @@ func (*FileObject) TableName() string {
 	return "file_objects"
 }
 
-func CreateFileObject(ctx context.Context, tx *gorm.DB, bucketName, objectKey string, fileName, mimeType, fileExt string, sizeBytes uint64, sha256Value string, storageProvider int) (*FileObject, *terror.Terror) {
+func CreateFileObjectTx(ctx context.Context, tx *gorm.DB, bucketName, objectKey string, fileName, mimeType, fileExt string, sizeBytes uint64, sha256Value string, storageProvider int) (*FileObject, *terror.Terror) {
 	fileObjectDB := &FileObject{
 		Id: tutil.NewOid().String(),
 
@@ -71,8 +71,8 @@ func CreateFileObject(ctx context.Context, tx *gorm.DB, bucketName, objectKey st
 
 	retGorm := tx.Create(fileObjectDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create file object (id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file ext: %s, size bytes: %d, sha256: %s, storage provider: %d) err (db create %v)",
-			fileObjectDB.Id, bucketName, fileObjectDB.ObjectKey, fileName, mimeType, fileExt, sizeBytes, sha256Value, storageProvider, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create file object (tx: %p, id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file ext: %s, size bytes: %d, sha256: %s, storage provider: %d) err (db create %v)",
+			tx, fileObjectDB.Id, bucketName, fileObjectDB.ObjectKey, fileName, mimeType, fileExt, sizeBytes, sha256Value, storageProvider, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -85,7 +85,7 @@ func CreateFileObject(ctx context.Context, tx *gorm.DB, bucketName, objectKey st
 func FindFileObject(ctx context.Context, fileObjectId string) (*FileObject, *terror.Terror) {
 	fileObjectsDB := make([]*FileObject, 0)
 
-	retGorm := serverClient.DB(ctx, runMode).Where("id = ?", fileObjectId).Limit(1).Find(&fileObjectsDB)
+	retGorm := DB(ctx).Where("id = ?", fileObjectId).Limit(1).Find(&fileObjectsDB)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Find file object (id: %s) err (db find %v)",
 			fileObjectId, retGorm.Error)
@@ -102,7 +102,7 @@ func FindFileObject(ctx context.Context, fileObjectId string) (*FileObject, *ter
 	return fileObjectsDB[0], nil
 }
 
-func UpdateFileObjectStorageInfo(ctx context.Context, tx *gorm.DB, fileObjectId, objectKey, sha256Value string) *terror.Terror {
+func UpdateFileObjectStorageInfoTx(ctx context.Context, tx *gorm.DB, fileObjectId, objectKey, sha256Value string) *terror.Terror {
 	params := map[string]any{
 		"object_key": objectKey,
 		"sha256":     sha256Value,
@@ -112,8 +112,8 @@ func UpdateFileObjectStorageInfo(ctx context.Context, tx *gorm.DB, fileObjectId,
 
 	retGorm := tx.Model(&FileObject{}).Where("id = ?", fileObjectId).Updates(params)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update file object storage info (id: %s, object key: %s, sha256: %s) err (db updates %v)",
-			fileObjectId, objectKey, sha256Value, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update file object storage info (tx: %p, id: %s, object key: %s, sha256: %s) err (db updates %v)",
+			tx, fileObjectId, objectKey, sha256Value, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 

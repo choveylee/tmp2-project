@@ -83,7 +83,7 @@ func (*DocumentVersion) TableName() string {
 	return "document_versions"
 }
 
-func CreateDocumentVersion(ctx context.Context, tx *gorm.DB, documentId string, versionNo uint, fileObjectId string,
+func CreateDocumentVersionTx(ctx context.Context, tx *gorm.DB, documentId string, versionNo uint, fileObjectId string,
 	parseStrategy, parserType int, contentSha256 string, pageCount, tokenCount, chunkCount uint, parseStatus int, parseError string, ocrStatus int, ocrError string) (*DocumentVersion, *terror.Terror) {
 	documentVersionDB := &DocumentVersion{
 		Id: tutil.NewOid().String(),
@@ -111,8 +111,8 @@ func CreateDocumentVersion(ctx context.Context, tx *gorm.DB, documentId string, 
 
 	retGorm := tx.Create(documentVersionDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create document version (id: %s, document id: %s, version no: %d, file object id: %s, parse strategy: %d, parser type: %d, content sha256: %s, page count: %d, token count: %d, chunk count: %d, parse status: %d, parse error: %s, ocr status: %d, ocr error: %s) err (db create %v)",
-			documentVersionDB.Id, documentId, versionNo, fileObjectId, parseStrategy, parserType, contentSha256, pageCount, tokenCount, chunkCount, parseStatus, parseError, ocrStatus, ocrError, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create document version (tx: %p, id: %s, document id: %s, version no: %d, file object id: %s, parse strategy: %d, parser type: %d, content sha256: %s, page count: %d, token count: %d, chunk count: %d, parse status: %d, parse error: %s, ocr status: %d, ocr error: %s) err (db create %v)",
+			tx, documentVersionDB.Id, documentId, versionNo, fileObjectId, parseStrategy, parserType, contentSha256, pageCount, tokenCount, chunkCount, parseStatus, parseError, ocrStatus, ocrError, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -125,7 +125,7 @@ func CreateDocumentVersion(ctx context.Context, tx *gorm.DB, documentId string, 
 func FindDocumentVersion(ctx context.Context, versionId string) (*DocumentVersion, *terror.Terror) {
 	documentVersionsDB := make([]*DocumentVersion, 0)
 
-	retGorm := serverClient.DB(ctx, runMode).Where("id = ?", versionId).Limit(1).Find(&documentVersionsDB)
+	retGorm := DB(ctx).Where("id = ?", versionId).Limit(1).Find(&documentVersionsDB)
 	if retGorm.Error != nil {
 		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Find document version (id: %s) err (db find %v)",
 			versionId, retGorm.Error)
@@ -142,7 +142,7 @@ func FindDocumentVersion(ctx context.Context, versionId string) (*DocumentVersio
 	return documentVersionsDB[0], nil
 }
 
-func UpdateDocumentVersionContentSha256(ctx context.Context, tx *gorm.DB, versionId, contentSha256 string) *terror.Terror {
+func UpdateDocumentVersionContentSha256Tx(ctx context.Context, tx *gorm.DB, versionId, contentSha256 string) *terror.Terror {
 	params := map[string]any{
 		"content_sha256": contentSha256,
 
@@ -151,8 +151,8 @@ func UpdateDocumentVersionContentSha256(ctx context.Context, tx *gorm.DB, versio
 
 	retGorm := tx.Model(&DocumentVersion{}).Where("id = ?", versionId).Updates(params)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document version content sha256 (id: %s, content sha256: %s) err (db updates %v)",
-			versionId, contentSha256, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document version content sha256 (tx: %p, id: %s, content sha256: %s) err (db updates %v)",
+			tx, versionId, contentSha256, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 

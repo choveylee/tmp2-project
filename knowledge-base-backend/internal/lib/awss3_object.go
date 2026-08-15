@@ -1,11 +1,9 @@
 package lib
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"path"
@@ -39,7 +37,7 @@ func SanitizeAwsS3FileName(fileName string) string {
 	return fileName
 }
 
-func BuildAwsS3RawObjectKey(knowledgeBaseId string, chatSessionId string, documentId string, versionId string, fileObjectId string, safeFileName string, now time.Time) string {
+func BuildAwsS3RawObjectKey(knowledgeBaseId string, chatSessionId string, documentId string, versionId string, fileObjectName string, now time.Time) string {
 	ownerPath := knowledgeBaseId
 	if strings.TrimSpace(ownerPath) == "" {
 		ownerPath = path.Join("chat", chatSessionId)
@@ -47,10 +45,10 @@ func BuildAwsS3RawObjectKey(knowledgeBaseId string, chatSessionId string, docume
 
 	rawDir := path.Join("raw", ownerPath, documentId, versionId, now.Format("2006"), now.Format("01"), now.Format("02"))
 
-	return path.Join(rawDir, fmt.Sprintf("%s-%s", fileObjectId, safeFileName))
+	return path.Join(rawDir, fileObjectName)
 }
 
-func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, targetFileName string, fileHeader *multipart.FileHeader) (string, *terror.Terror) {
+func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, objectFileName string, fileHeader *multipart.FileHeader) (string, *terror.Terror) {
 	fileName := ""
 	fileSize := int64(0)
 	if fileHeader != nil {
@@ -59,8 +57,8 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 	}
 
 	if fileHeader == nil {
-		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d) err (file header nil)",
-			bucketName, objectKey, targetFileName, fileName, fileSize)
+		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (file header nil)",
+			bucketName, objectKey, objectFileName, fileName, fileSize)
 
 		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("file"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
@@ -68,8 +66,8 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 	}
 
 	if awsS3Client == nil {
-		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d) err (aws s3 client nil)",
-			bucketName, objectKey, targetFileName, fileName, fileSize)
+		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (aws s3 client nil)",
+			bucketName, objectKey, objectFileName, fileName, fileSize)
 
 		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("AWSS3_CLIENT"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
@@ -78,8 +76,8 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 
 	bucketName = strings.Trim(bucketName, "/")
 	if bucketName == "" {
-		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d) err (bucket empty)",
-			bucketName, objectKey, targetFileName, fileName, fileSize)
+		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (bucket empty)",
+			bucketName, objectKey, objectFileName, fileName, fileSize)
 
 		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("AWSS3_BUCKET"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
@@ -88,20 +86,20 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 
 	objectKey = strings.Trim(objectKey, "/")
 	if objectKey == "" {
-		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d) err (object key empty)",
-			bucketName, objectKey, targetFileName, fileName, fileSize)
+		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (object key empty)",
+			bucketName, objectKey, objectFileName, fileName, fileSize)
 
 		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("object key"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
 		return "", errx
 	}
 
-	targetFileName = strings.TrimSpace(targetFileName)
+	objectFileName = strings.TrimSpace(objectFileName)
 
 	file, err := fileHeader.Open()
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d) err (open file %v)",
-			bucketName, objectKey, targetFileName, fileName, fileSize, err)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (open file %v)",
+			bucketName, objectKey, objectFileName, fileName, fileSize, err)
 
 		errx := terror.NewTerror(ctx, err, constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
@@ -109,13 +107,22 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 	}
 	defer file.Close()
 
-	body := &bytes.Buffer{}
 	hash := sha256.New()
 
-	_, err = io.Copy(io.MultiWriter(body, hash), file)
+	_, err = io.Copy(hash, file)
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d) err (copy file %v)",
-			bucketName, objectKey, targetFileName, fileName, fileSize, err)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (copy file %v)",
+			bucketName, objectKey, objectFileName, fileName, fileSize, err)
+
+		errx := terror.NewTerror(ctx, err, constant.ErrorCodeObjectStorageUploadFailed, errMsg)
+
+		return "", errx
+	}
+
+	_, err = file.Seek(0, io.SeekStart)
+	if err != nil {
+		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (seek file %v)",
+			bucketName, objectKey, objectFileName, fileName, fileSize, err)
 
 		errx := terror.NewTerror(ctx, err, constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
@@ -125,7 +132,9 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 	putObjectInput := &s3.PutObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(objectKey),
-		Body:   bytes.NewReader(body.Bytes()),
+
+		Body:          file,
+		ContentLength: aws.Int64(fileSize),
 	}
 
 	contentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
@@ -135,8 +144,8 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, t
 
 	_, err = awsS3Client.PutObject(ctx, putObjectInput)
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, target file name: %s, file name: %s, file size: %d, content type: %s) err (put object %v)",
-			bucketName, objectKey, targetFileName, fileName, fileSize, contentType, err)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d, content type: %s) err (put object %v)",
+			bucketName, objectKey, objectFileName, fileName, fileSize, contentType, err)
 
 		errx := terror.NewTerror(ctx, err, constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 

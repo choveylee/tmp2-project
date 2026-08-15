@@ -411,6 +411,9 @@ func HandleCreateDocument(c *gin.Context) {
 	if userId != "" {
 		ownerId = userId
 	}
+	if ownerId == "" {
+		ownerId = constant.DefaultAnonymousOwnerId
+	}
 
 	langCode := strings.TrimSpace(c.PostForm("lang_code"))
 	if len(langCode) > dbmodel.DocumentLangCodeLen {
@@ -420,6 +423,9 @@ func HandleCreateDocument(c *gin.Context) {
 		SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
 
 		return
+	}
+	if langCode == "" {
+		langCode = constant.DefaultDocumentLangCode
 	}
 
 	fileHeader, err := c.FormFile("file")
@@ -598,6 +604,9 @@ func HandleUpdateDocument(c *gin.Context) {
 		SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
 
 		return
+	}
+	if langCode == "" {
+		langCode = constant.DefaultDocumentLangCode
 	}
 
 	status := updateDocumentRequest.Status
