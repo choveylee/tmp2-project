@@ -75,8 +75,8 @@ func CreateIngestJobTx(ctx context.Context, tx *gorm.DB, documentId, versionId s
 
 	retGorm := tx.Create(ingestJobDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create ingest job (tx: %p, id: %s, document id: %s, version id: %s, job type: %d, job status: %d, retry count: %d, worker name: %s, error message: %s, payload: %s) err (db create %v)",
-			tx, ingestJobDB.Id, documentId, versionId, jobType, jobStatus, retryCount, workerName, errorMessage, payload, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create ingest job tx (id: %s, document id: %s, version id: %s, job type: %d, job status: %d, retry count: %d, worker name: %s, error message: %s, payload: %s) err (db create %v)",
+			ingestJobDB.Id, documentId, versionId, jobType, jobStatus, retryCount, workerName, errorMessage, payload, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 

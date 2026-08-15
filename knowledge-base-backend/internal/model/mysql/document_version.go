@@ -111,8 +111,8 @@ func CreateDocumentVersionTx(ctx context.Context, tx *gorm.DB, documentId string
 
 	retGorm := tx.Create(documentVersionDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create document version (tx: %p, id: %s, document id: %s, version no: %d, file object id: %s, parse strategy: %d, parser type: %d, content sha256: %s, page count: %d, token count: %d, chunk count: %d, parse status: %d, parse error: %s, ocr status: %d, ocr error: %s) err (db create %v)",
-			tx, documentVersionDB.Id, documentId, versionNo, fileObjectId, parseStrategy, parserType, contentSha256, pageCount, tokenCount, chunkCount, parseStatus, parseError, ocrStatus, ocrError, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create document version tx (id: %s, document id: %s, version no: %d, file object id: %s, parse strategy: %d, parser type: %d, content sha256: %s, page count: %d, token count: %d, chunk count: %d, parse status: %d, parse error: %s, ocr status: %d, ocr error: %s) err (db create %v)",
+			documentVersionDB.Id, documentId, versionNo, fileObjectId, parseStrategy, parserType, contentSha256, pageCount, tokenCount, chunkCount, parseStatus, parseError, ocrStatus, ocrError, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -151,8 +151,8 @@ func UpdateDocumentVersionContentSha256Tx(ctx context.Context, tx *gorm.DB, vers
 
 	retGorm := tx.Model(&DocumentVersion{}).Where("id = ?", versionId).Updates(params)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document version content sha256 (tx: %p, id: %s, content sha256: %s) err (db updates %v)",
-			tx, versionId, contentSha256, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document version content sha256 tx (id: %s, content sha256: %s) err (db updates %v)",
+			versionId, contentSha256, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 

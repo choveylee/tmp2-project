@@ -71,8 +71,8 @@ func CreateFileObjectTx(ctx context.Context, tx *gorm.DB, bucketName, objectKey 
 
 	retGorm := tx.Create(fileObjectDB)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create file object (tx: %p, id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file ext: %s, size bytes: %d, sha256: %s, storage provider: %d) err (db create %v)",
-			tx, fileObjectDB.Id, bucketName, fileObjectDB.ObjectKey, fileName, mimeType, fileExt, sizeBytes, sha256Value, storageProvider, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create file object tx (id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file ext: %s, size bytes: %d, sha256: %s, storage provider: %d) err (db create %v)",
+			fileObjectDB.Id, bucketName, fileObjectDB.ObjectKey, fileName, mimeType, fileExt, sizeBytes, sha256Value, storageProvider, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 
@@ -112,8 +112,8 @@ func UpdateFileObjectStorageInfoTx(ctx context.Context, tx *gorm.DB, fileObjectI
 
 	retGorm := tx.Model(&FileObject{}).Where("id = ?", fileObjectId).Updates(params)
 	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update file object storage info (tx: %p, id: %s, object key: %s, sha256: %s) err (db updates %v)",
-			tx, fileObjectId, objectKey, sha256Value, retGorm.Error)
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update file object storage info tx (id: %s, object key: %s, sha256: %s) err (db updates %v)",
+			fileObjectId, objectKey, sha256Value, retGorm.Error)
 
 		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
 

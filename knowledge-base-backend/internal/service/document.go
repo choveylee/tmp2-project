@@ -327,8 +327,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		documentDB, errx = dbmodel.CreateDocumentTx(ctx, tx, knowledgeBaseId, chatSessionId, scopeType, sourceType,
 			title, summary, tags, ownerId, langCode, 0, "", dbmodel.DocumentProcessStatusWaiting, dbmodel.DocumentStatusNormal)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -338,8 +338,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		fileObjectDB, errx = dbmodel.CreateFileObjectTx(ctx, tx, bucketName, "", originFileName, mimeType, fileExt,
 			uint64(fileSize), "", dbmodel.FileObjectStorageProviderSeaweedFS)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -349,8 +349,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		documentVersionDB, errx = dbmodel.CreateDocumentVersionTx(ctx, tx, documentId, 1, fileObjectId, parseStrategy,
 			dbmodel.DocumentParserTypeUnknown, "", 0, 0, 0, dbmodel.DocumentVersionParseStatusPending, "", ocrStatus, "")
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, fileObjectId, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, fileObjectId, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -359,8 +359,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 		errx = dbmodel.UpdateDocumentCurrentVersionTx(ctx, tx, documentId, documentVersionDB.VersionNo, versionId)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -369,14 +369,14 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		return nil
 	})
 	if err != nil {
-		if errx != nil {
-			return nil, errx
-		}
-
 		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
 			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, originFileName, fileSize, err)
 
-		errx := terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+		if errx != nil {
+			errx.AttachErrMsg(errMsg)
+		} else {
+			errx = terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+		}
 
 		return nil, errx
 	}
@@ -416,8 +416,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 	err = dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
 		errx = dbmodel.UpdateFileObjectStorageInfoTx(ctx, tx, fileObjectId, objectKey, sha256Value)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update file object storage info %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update file object storage info %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -425,8 +425,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 		errx = dbmodel.UpdateDocumentVersionContentSha256Tx(ctx, tx, versionId, sha256Value)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document version content sha256 %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document version content sha256 %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -434,8 +434,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 		errx = dbmodel.UpdateDocumentProcessStatusTx(ctx, tx, documentId, dbmodel.DocumentProcessStatusUploaded)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document process status %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document process status %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -444,8 +444,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		ingestJobDB, errx = dbmodel.CreateIngestJobTx(ctx, tx, documentId, versionId, dbmodel.IngestJobTypeParse,
 			dbmodel.IngestJobStatusPending, 0, "", "", jobPayload)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (tx: %p, user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db create ingest job %v)",
-				tx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db create ingest job %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -454,10 +454,6 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		return nil
 	})
 	if err != nil {
-		if errx != nil {
-			return nil, errx
-		}
-
 		jobId := ""
 		if ingestJobDB != nil {
 			jobId = ingestJobDB.Id
@@ -466,7 +462,11 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db complete document upload transaction %v)",
 			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, jobId, bucketName, objectKey, sha256Value, originFileName, fileSize, err)
 
-		errx := terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+		if errx != nil {
+			errx.AttachErrMsg(errMsg)
+		} else {
+			errx = terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+		}
 
 		return nil, errx
 	}
@@ -561,14 +561,14 @@ func DeleteDocument(ctx context.Context, userId string, documentId string) *terr
 		return nil
 	})
 	if err != nil {
-		if errx != nil {
-			return errx
-		}
-
 		errMsg := tlog.E(ctx).Err(err).Msgf("Delete document (user id: %s, document id: %s) err (db transaction %v)",
 			userId, documentId, err)
 
-		errx := terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+		if errx != nil {
+			errx.AttachErrMsg(errMsg)
+		} else {
+			errx = terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+		}
 
 		return errx
 	}
