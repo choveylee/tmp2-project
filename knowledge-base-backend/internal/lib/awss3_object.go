@@ -69,7 +69,7 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (aws s3 client nil)",
 			bucketName, objectKey, objectFileName, fileName, fileSize)
 
-		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("AWSS3_CLIENT"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
+		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("aws s3 client"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
 		return "", errx
 	}
@@ -79,7 +79,7 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (bucket empty)",
 			bucketName, objectKey, objectFileName, fileName, fileSize)
 
-		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("AWSS3_BUCKET"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
+		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("aws s3 bucket"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
 
 		return "", errx
 	}
@@ -156,4 +156,63 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 	}
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func DownloadAwsS3File(ctx context.Context, bucketName string, objectKey string) ([]byte, *terror.Terror) {
+	if awsS3Client == nil {
+		errMsg := tlog.E(ctx).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (aws s3 client nil)",
+			bucketName, objectKey)
+
+		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("aws s3 client"), constant.ErrorCodeObjectStorageDownloadFailed, errMsg)
+
+		return nil, errx
+	}
+
+	bucketName = strings.Trim(bucketName, "/")
+	if bucketName == "" {
+		errMsg := tlog.E(ctx).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (bucket empty)",
+			bucketName, objectKey)
+
+		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("aws s3 bucket"), constant.ErrorCodeObjectStorageDownloadFailed, errMsg)
+
+		return nil, errx
+	}
+
+	objectKey = strings.Trim(objectKey, "/")
+	if objectKey == "" {
+		errMsg := tlog.E(ctx).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (object key empty)",
+			bucketName, objectKey)
+
+		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("object key"), constant.ErrorCodeObjectStorageDownloadFailed, errMsg)
+
+		return nil, errx
+	}
+
+	getObjectInput := &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+	}
+
+	getObjectOutput, err := awsS3Client.GetObject(ctx, getObjectInput)
+	if err != nil {
+		errMsg := tlog.E(ctx).Err(err).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (get object %v)",
+			bucketName, objectKey, err)
+
+		errx := terror.NewTerror(ctx, err, constant.ErrorCodeObjectStorageDownloadFailed, errMsg)
+
+		return nil, errx
+	}
+	defer getObjectOutput.Body.Close()
+
+	fileBytes, err := io.ReadAll(getObjectOutput.Body)
+	if err != nil {
+		errMsg := tlog.E(ctx).Err(err).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (read object body %v)",
+			bucketName, objectKey, err)
+
+		errx := terror.NewTerror(ctx, err, constant.ErrorCodeObjectStorageDownloadFailed, errMsg)
+
+		return nil, errx
+	}
+
+	return fileBytes, nil
 }

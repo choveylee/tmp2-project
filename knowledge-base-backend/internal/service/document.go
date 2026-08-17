@@ -16,6 +16,7 @@ import (
 	"dev.choveylee.top/knowledge-base-backend/internal/data"
 	"dev.choveylee.top/knowledge-base-backend/internal/lib"
 	dbmodel "dev.choveylee.top/knowledge-base-backend/internal/model/mysql"
+	redmodel "dev.choveylee.top/knowledge-base-backend/internal/model/redis"
 )
 
 func ListDocuments(ctx context.Context, userId, knowledgeBaseId, keyword string, scopeType, sourceType, processStatus, status int, pageNum, pageSize int) (*data.ListDocumentsRespData, *terror.Terror) {
@@ -469,6 +470,13 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		}
 
 		return nil, errx
+	}
+
+	errx = redmodel.PushParseIngestJob(ctx, ingestJobDB.Id)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (redis push parse ingest job %v)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, ingestJobDB.Id, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+		errx.AttachErrMsg(errMsg)
 	}
 
 	createDocumentRespData := &data.CreateDocumentRespData{

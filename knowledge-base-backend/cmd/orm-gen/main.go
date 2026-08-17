@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/choveylee/tcfg"
 	"github.com/choveylee/tdb"
@@ -17,9 +19,9 @@ func main() {
 
 	runMode := tcfg.DefaultString(tcfg.LocalKey("RUN_MODE"), constant.RunModeDebug)
 
-	serverDsn, err := tcfg.String(tcfg.LocalKey("SERVER_MYSQL_DSN"))
-	if err != nil {
-		tlog.E(ctx).Err(err).Msgf("ORM code generation failed while reading configuration key %s", "SERVER_MYSQL_DSN")
+	serverDsn := strings.TrimSpace(tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")), ""))
+	if serverDsn == "" {
+		tlog.E(ctx).Msgf("ORM code generation failed because configuration key %s is empty", "server mysql dsn")
 
 		return
 	}

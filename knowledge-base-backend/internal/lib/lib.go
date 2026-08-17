@@ -19,5 +19,23 @@ func InitLib(ctx context.Context) *terror.Terror {
 		return errx
 	}
 
+	errx = initTika(ctx)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Init lib err (init tika %v)",
+			errx.Error())
+		errx.AttachErrMsg(errMsg)
+
+		return errx
+	}
+
+	errx = initEino(ctx)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Init lib err (init eino %v)",
+			errx.Error())
+		errx.AttachErrMsg(errMsg)
+
+		return errx
+	}
+
 	return nil
 }

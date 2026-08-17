@@ -40,7 +40,8 @@ func main() {
 	// Run migrations first so the database schema is ready before startup.
 	errx := runMigrate(ctx)
 	if errx != nil {
-		tlog.E(ctx).Err(errx).Msg("service startup failed during database migration")
+		tlog.E(ctx).Err(errx).Msgf("Main err (run migrate %v)",
+			errx)
 
 		return
 	}
@@ -48,7 +49,8 @@ func main() {
 	// Initialize external dependency clients such as object storage.
 	errx = lib.InitLib(ctx)
 	if errx != nil {
-		tlog.E(ctx).Err(errx).Msg("service startup failed during shared library initialization")
+		tlog.E(ctx).Err(errx).Msgf("Main err (init lib %v)",
+			errx)
 
 		return
 	}
@@ -56,22 +58,8 @@ func main() {
 	// Initialize model-layer dependencies such as database and cache clients.
 	errx = model.InitModel(ctx)
 	if errx != nil {
-		tlog.E(ctx).Err(errx).Msg("service startup failed during model initialization")
-
-		return
-	}
-
-	// Initialize and start background cron jobs.
-	errx = crontab.InitCron(ctx)
-	if errx != nil {
-		tlog.E(ctx).Err(errx).Msg("service startup failed during cron configuration initialization")
-
-		return
-	}
-
-	errx = crontab.StartCron(ctx)
-	if errx != nil {
-		tlog.E(ctx).Err(errx).Msg("service startup failed during cron job registration")
+		tlog.E(ctx).Err(errx).Msgf("Main err (init model %v)",
+			errx)
 
 		return
 	}
@@ -79,7 +67,34 @@ func main() {
 	// Initialize the business service layer.
 	errx = service.InitService(ctx)
 	if errx != nil {
-		tlog.E(ctx).Err(errx).Msg("service startup failed during service initialization")
+		tlog.E(ctx).Err(errx).Msgf("Main err (init service %v)",
+			errx)
+
+		return
+	}
+
+	// Start the resident ingest worker before the compensation cron is registered.
+	errx = service.StartIngestWorker(ctx)
+	if errx != nil {
+		tlog.E(ctx).Err(errx).Msgf("Main err (start ingest worker %v)",
+			errx)
+
+		return
+	}
+
+	// Initialize and start low-frequency compensation cron jobs.
+	errx = crontab.InitCron(ctx)
+	if errx != nil {
+		tlog.E(ctx).Err(errx).Msgf("Main err (init cron %v)",
+			errx)
+
+		return
+	}
+
+	errx = crontab.StartCron(ctx)
+	if errx != nil {
+		tlog.E(ctx).Err(errx).Msgf("Main err (start cron %v)",
+			errx)
 
 		return
 	}
@@ -88,34 +103,37 @@ func main() {
 
 	go func() {
 		if err := waitForTcpDial(ctx, httpPort, 30*time.Second); err != nil {
-			tlog.W(ctx).Msg("startup health probe was skipped because the HTTP listener did not become ready before the timeout elapsed")
+			tlog.W(ctx).Err(err).Msgf("Main (http port: %d) err (wait for tcp dial %v)",
+				httpPort, err)
 
 			return
 		}
 
 		errx := pingServer(ctx, httpPort)
 		if errx != nil {
-			tlog.W(ctx).Msg("startup health probe failed after the HTTP listener became ready")
+			tlog.W(ctx).Err(errx).Msgf("Main (http port: %d) err (ping server %v)",
+				httpPort, errx)
 		} else {
-			tlog.I(ctx).Msg("HTTP server started successfully")
+			tlog.I(ctx).Msgf("Main (http port: %d) info (http server started)",
+				httpPort)
 		}
 	}()
 
 	if err := tserver.StartHttpServer(ctx, router.NewRouter(ctx), httpPort); err != nil {
-		tlog.F(ctx).Err(err).Msg("HTTP server exited with an error")
+		tlog.F(ctx).Err(err).Msgf("Main (http port: %d) err (start http server %v)",
+			httpPort, err)
 	}
 }
 
 func runMigrate(ctx context.Context) *terror.Terror {
 	runMode := tcfg.DefaultString(tcfg.LocalKey("RUN_MODE"), constant.RunModeDebug)
 
-	serverDsn, err := tcfg.String(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")))
-	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("database migration setup failed while reading configuration key %q (run_mode=%s)",
-			fmt.Sprintf("%s::%s", runMode, "SERVER_MYSQL_DSN"), runMode,
-		)
+	serverDsn := strings.TrimSpace(tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")), ""))
+	if serverDsn == "" {
+		errMsg := tlog.E(ctx).Msgf("Run migrate (run mode: %s, config key: %s) err (server mysql dsn empty)",
+			runMode, "server mysql dsn")
 
-		errx := terror.NewRawTerror(ctx, err, errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server mysql dsn"), errMsg)
 
 		return errx
 	}
@@ -132,9 +150,8 @@ func runMigrate(ctx context.Context) *terror.Terror {
 
 		serverCfg, err := mysql.ParseDSN(serverDsn)
 		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("database migration setup failed while parsing the MySQL DSN (run_mode=%s, migration_source=file://migration, initial_migration_client_error=%v)",
-				runMode, initialClientErr,
-			)
+			errMsg := tlog.E(ctx).Err(err).Msgf("Run migrate (run mode: %s, migration source: %s, initial client err: %v) err (parse dsn %v)",
+				runMode, "file://migration", initialClientErr, err)
 
 			errx := terror.NewRawTerror(ctx, err, errMsg)
 
@@ -143,18 +160,16 @@ func runMigrate(ctx context.Context) *terror.Terror {
 
 		dbName := serverCfg.DBName
 
-		tlog.W(ctx).Err(initialClientErr).Msgf("database migration client creation failed; attempting database creation fallback (run_mode=%s, database=%q, migration_source=file://migration)",
-			runMode, dbName,
-		)
+		tlog.W(ctx).Err(initialClientErr).Msgf("Run migrate (run mode: %s, database: %s, migration source: %s) info (migrate new failed, try db create database %v)",
+			runMode, dbName, "file://migration", initialClientErr)
 
 		serverCfg.DBName = ""
 		tmpDsn := serverCfg.FormatDSN()
 
 		db, err := sql.Open("mysql", tmpDsn)
 		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("database migration setup failed while opening the MySQL connection (run_mode=%s, database=%q, migration_source=file://migration, initial_migration_client_error=%v)",
-				runMode, dbName, initialClientErr,
-			)
+			errMsg := tlog.E(ctx).Err(err).Msgf("Run migrate (run mode: %s, database: %s, migration source: %s, initial client err: %v) err (db open mysql %v)",
+				runMode, dbName, "file://migration", initialClientErr, err)
 
 			errx := terror.NewRawTerror(ctx, err, errMsg)
 
@@ -165,9 +180,8 @@ func runMigrate(ctx context.Context) *terror.Terror {
 
 		_, err = db.Exec("CREATE DATABASE IF NOT EXISTS " + "`" + dbName + "` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci")
 		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("database migration setup failed while creating database %q (run_mode=%s, migration_source=file://migration, initial_migration_client_error=%v)",
-				dbName, runMode, initialClientErr,
-			)
+			errMsg := tlog.E(ctx).Err(err).Msgf("Run migrate (run mode: %s, database: %s, migration source: %s, initial client err: %v) err (db exec create database %v)",
+				runMode, dbName, "file://migration", initialClientErr, err)
 
 			errx := terror.NewRawTerror(ctx, err, errMsg)
 
@@ -176,9 +190,8 @@ func runMigrate(ctx context.Context) *terror.Terror {
 
 		client, err = migrate.New("file://migration", "mysql://"+tutil.MysqlDsnEncode(serverDsn))
 		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("database migration setup failed while creating the migration client (run_mode=%s, database=%q, migration_source=file://migration, initial_migration_client_error=%v)",
-				runMode, dbName, initialClientErr,
-			)
+			errMsg := tlog.E(ctx).Err(err).Msgf("Run migrate (run mode: %s, database: %s, migration source: %s, initial client err: %v) err (db migrate new %v)",
+				runMode, dbName, "file://migration", initialClientErr, err)
 
 			errx := terror.NewRawTerror(ctx, err, errMsg)
 
@@ -189,25 +202,24 @@ func runMigrate(ctx context.Context) *terror.Terror {
 	defer func() {
 		srcErr, dbErr := client.Close()
 		if srcErr != nil || dbErr != nil {
-			tlog.W(ctx).Msgf("database migration cleanup reported errors (source: %v, database: %v)", srcErr, dbErr)
+			tlog.W(ctx).Msgf("Run migrate (run mode: %s, database: %s) err (db migrate close source %v database %v)",
+				runMode, serverDBName, srcErr, dbErr)
 		}
 	}()
 
 	err = client.Up()
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		if serverDBName != "" {
-			errMsg := tlog.E(ctx).Err(err).Msgf("database migration failed while applying migration files (run_mode=%s, database=%q, migration_source=file://migration)",
-				runMode, serverDBName,
-			)
+			errMsg := tlog.E(ctx).Err(err).Msgf("Run migrate (run mode: %s, database: %s, migration source: %s) err (db migrate up %v)",
+				runMode, serverDBName, "file://migration", err)
 
 			errx := terror.NewRawTerror(ctx, err, errMsg)
 
 			return errx
 		}
 
-		errMsg := tlog.E(ctx).Err(err).Msgf("database migration failed while applying migration files (run_mode=%s, migration_source=file://migration)",
-			runMode,
-		)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Run migrate (run mode: %s, migration source: %s) err (db migrate up %v)",
+			runMode, "file://migration", err)
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)
 
@@ -274,7 +286,7 @@ func pingServer(ctx context.Context, httpPort int) *terror.Terror {
 	baseUrl := resolvePingBaseUrl(httpPort)
 	pingUrl := baseUrl + "/healthz"
 
-	for i := 0; i < pingCount; i++ {
+	for i := range pingCount {
 		if i > 0 {
 			time.Sleep(time.Second)
 		}
@@ -292,9 +304,12 @@ func pingServer(ctx context.Context, httpPort int) *terror.Terror {
 		return nil
 	}
 
-	errMsg := tlog.E(ctx).Msg("startup health probe failed after all retry attempts")
+	err := terror.ErrSvcExecute("http server")
 
-	errx := terror.NewRawTerror(ctx, terror.ErrSvcExecute("http server"), errMsg)
+	errMsg := tlog.E(ctx).Err(err).Msgf("Ping server (http port: %d, ping count: %d, ping url: %s) err (get %v)",
+		httpPort, pingCount, pingUrl, err)
+
+	errx := terror.NewRawTerror(ctx, err, errMsg)
 
 	return errx
 }

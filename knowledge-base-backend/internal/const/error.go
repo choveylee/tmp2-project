@@ -43,9 +43,11 @@ var (
 	ErrorCodeKnowledgeBaseNotFound  = register(100101, "知识库不存在")
 	ErrorCodeKnowledgeBaseCodeExist = register(100102, "知识库编码已存在")
 
-	ErrorCodeDocumentNotFound          = register(100201, "文档不存在")
-	ErrorCodeDocumentFileInvalid       = register(100202, "文档文件非法")
-	ErrorCodeObjectStorageUploadFailed = register(100203, "对象存储上传失败")
+	ErrorCodeDocumentNotFound            = register(100201, "文档不存在")
+	ErrorCodeDocumentFileInvalid         = register(100202, "文档文件非法")
+	ErrorCodeObjectStorageUploadFailed   = register(100203, "对象存储上传失败")
+	ErrorCodeObjectStorageDownloadFailed = register(100204, "对象存储下载失败")
+	ErrorCodeDocumentParseFailed         = register(100205, "文档解析失败")
 )
 
 // StatusCode returns the HTTP status code mapped to errCode.
@@ -78,7 +80,7 @@ func StatusCode(errCode int) int {
 	case ErrorCodeDocumentNotFound, ErrorCodeDocumentFileInvalid:
 		return http.StatusBadRequest
 
-	case ErrorCodeObjectStorageUploadFailed:
+	case ErrorCodeObjectStorageUploadFailed, ErrorCodeObjectStorageDownloadFailed, ErrorCodeDocumentParseFailed:
 		return http.StatusInternalServerError
 
 	default:

@@ -3,6 +3,7 @@ package init
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/choveylee/tcfg"
@@ -12,9 +13,9 @@ import (
 func init() {
 	ctx := context.Background()
 
-	timeLocation, err := tcfg.String(tcfg.LocalKey("TIME_LOCATION"))
-	if err != nil {
-		tlog.F(ctx).Err(err).Msgf("process initialization failed while reading configuration key %s", "TIME_LOCATION")
+	timeLocation := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("TIME_LOCATION"), "Asia/Shanghai"))
+	if timeLocation == "" {
+		tlog.F(ctx).Msgf("process initialization failed because configuration key %s is empty", "time location")
 	}
 
 	location, err := time.LoadLocation(timeLocation)

@@ -28,9 +28,9 @@ func InitMysqlModel(ctx context.Context) *terror.Terror {
 
 	serverDsn := tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")), "")
 	if serverDsn == "" {
-		errMsg := tlog.E(ctx).Msg("MySQL initialization failed because the server DSN is not configured")
+		errMsg := tlog.E(ctx).Msg("MySQL initialization failed because configuration key server mysql dsn is empty")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("SERVER_MYSQL_DSN"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server mysql dsn"), errMsg)
 
 		return errx
 	}

@@ -34,54 +34,54 @@ func AwsS3Bucket() string {
 func initAmazonS3(ctx context.Context) *terror.Terror {
 	awsS3Endpoint := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_ENDPOINT"), ""))
 	if awsS3Endpoint == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (asw s3 endpoint illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 endpoint illegal)")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("asw s3 endpoint"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 endpoint"), errMsg)
 
 		return errx
 	}
 
 	awsS3Endpoint2 = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_ENDPOINT2"), ""))
 	if awsS3Endpoint2 == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (asw s3 endpoint2 illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 endpoint2 illegal)")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("asw s3 endpoint2"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 endpoint2"), errMsg)
 
 		return errx
 	}
 
 	awsS3AccessKey := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_ACCESS_KEY"), ""))
 	if awsS3AccessKey == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (asw s3 access key illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 access key illegal)")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("asw s3 access key"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 access key"), errMsg)
 
 		return errx
 	}
 
 	awsS3SecretKey := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_SECRET_KEY"), ""))
 	if awsS3SecretKey == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (asw s3 secret key illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 secret key illegal)")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("asw s3 secret key"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 secret key"), errMsg)
 
 		return errx
 	}
 
 	awsS3Bucket = strings.Trim(strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_BUCKET"), "")), "/")
 	if awsS3Bucket == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (asw s3 bucket illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 bucket illegal)")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("asw s3 bucket"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 bucket"), errMsg)
 
 		return errx
 	}
 
 	awsS3Region := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_REGION"), "us-east-1"))
 	if awsS3Region == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (asw s3 region illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 region illegal)")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("asw s3 region"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 region"), errMsg)
 
 		return errx
 	}
@@ -92,7 +92,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(awsS3AccessKey, awsS3SecretKey, "")),
 	)
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Init S3 object storage (asw s3 endpoint: %s, asw s3 bucket: %s, asw s3 region: %s) err (load aws config %v)",
+		errMsg := tlog.E(ctx).Err(err).Msgf("Init S3 object storage (aws s3 endpoint: %s, aws s3 bucket: %s, aws s3 region: %s) err (load aws config %v)",
 			awsS3Endpoint, awsS3Bucket, awsS3Region, err)
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)
@@ -124,7 +124,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 		Bucket: aws.String(awsS3Bucket),
 	})
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Init amazon s3 (asw s3 endpoint: %s, asw s3 bucket: %s, asw s3 region: %s) err (head bucket %v)",
+		errMsg := tlog.E(ctx).Err(err).Msgf("Init amazon s3 (aws s3 endpoint: %s, aws s3 bucket: %s, aws s3 region: %s) err (head bucket %v)",
 			awsS3Endpoint, awsS3Bucket, awsS3Region, err)
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)

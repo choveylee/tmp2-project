@@ -31,9 +31,9 @@ func InitRedisModel(ctx context.Context) *terror.Terror {
 
 	serverAddress := tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_REDIS_ADDRESS")), "")
 	if serverAddress == "" {
-		errMsg := tlog.E(ctx).Msg("Redis initialization failed because the server address is not configured")
+		errMsg := tlog.E(ctx).Msg("Redis initialization failed because configuration key server redis address is empty")
 
-		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("SERVER_REDIS_ADDRESS"), errMsg)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server redis address"), errMsg)
 
 		return errx
 	}

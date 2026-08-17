@@ -161,3 +161,56 @@ func UpdateDocumentVersionContentSha256Tx(ctx context.Context, tx *gorm.DB, vers
 
 	return nil
 }
+
+func UpdateDocumentVersionParseStatusTx(ctx context.Context, tx *gorm.DB, versionId string, parseStatus int, parseError string) *terror.Terror {
+	params := map[string]any{
+		"parse_status": parseStatus,
+		"parse_error":  parseError,
+
+		"updated_at": time.Now(),
+	}
+
+	retGorm := tx.Model(&DocumentVersion{}).Where("id = ?", versionId).Updates(params)
+	if retGorm.Error != nil {
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document version parse status tx (id: %s, parse status: %d, parse error: %s) err (db updates %v)",
+			versionId, parseStatus, parseError, retGorm.Error)
+
+		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+
+		return errx
+	}
+
+	return nil
+}
+
+func UpdateDocumentVersionParseResultTx(ctx context.Context, tx *gorm.DB, versionId string, parserType int, plainText string,
+	pageCount, tokenCount, chunkCount uint, parseStatus int, parseError string, ocrStatus int, ocrError string) *terror.Terror {
+	params := map[string]any{
+		"parser_type": parserType,
+		"plain_text":  plainText,
+
+		"page_count":  pageCount,
+		"token_count": tokenCount,
+		"chunk_count": chunkCount,
+
+		"parse_status": parseStatus,
+		"parse_error":  parseError,
+
+		"ocr_status": ocrStatus,
+		"ocr_error":  ocrError,
+
+		"updated_at": time.Now(),
+	}
+
+	retGorm := tx.Model(&DocumentVersion{}).Where("id = ?", versionId).Updates(params)
+	if retGorm.Error != nil {
+		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update document version parse result tx (id: %s, parser type: %d, page count: %d, token count: %d, chunk count: %d, parse status: %d, parse error: %s, ocr status: %d, ocr error: %s) err (db updates %v)",
+			versionId, parserType, pageCount, tokenCount, chunkCount, parseStatus, parseError, ocrStatus, ocrError, retGorm.Error)
+
+		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
+
+		return errx
+	}
+
+	return nil
+}
