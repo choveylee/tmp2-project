@@ -13,8 +13,7 @@ var einoTextChunkSize int
 func initEino(ctx context.Context) *terror.Terror {
 	einoTextChunkSize = tcfg.DefaultInt(tcfg.LocalKey("EINO_TEXT_CHUNK_SIZE"), 1800)
 	if einoTextChunkSize <= 0 {
-		errMsg := tlog.E(ctx).Msgf("Init eino (config key: %s, chunk size: %d) err (chunk size invalid)",
-			"eino text chunk size",
+		errMsg := tlog.E(ctx).Msgf("Init eino (chunk size: %d) err (eino text chunk size invalid)",
 			einoTextChunkSize)
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("eino text chunk size"), errMsg)

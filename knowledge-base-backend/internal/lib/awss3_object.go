@@ -65,15 +65,6 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 		return "", errx
 	}
 
-	if awsS3Client == nil {
-		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (aws s3 client nil)",
-			bucketName, objectKey, objectFileName, fileName, fileSize)
-
-		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("aws s3 client"), constant.ErrorCodeObjectStorageUploadFailed, errMsg)
-
-		return "", errx
-	}
-
 	bucketName = strings.Trim(bucketName, "/")
 	if bucketName == "" {
 		errMsg := tlog.E(ctx).Msgf("Upload aws s3 file (bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (bucket empty)",
@@ -159,15 +150,6 @@ func UploadAwsS3File(ctx context.Context, bucketName string, objectKey string, o
 }
 
 func DownloadAwsS3File(ctx context.Context, bucketName string, objectKey string) ([]byte, *terror.Terror) {
-	if awsS3Client == nil {
-		errMsg := tlog.E(ctx).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (aws s3 client nil)",
-			bucketName, objectKey)
-
-		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("aws s3 client"), constant.ErrorCodeObjectStorageDownloadFailed, errMsg)
-
-		return nil, errx
-	}
-
 	bucketName = strings.Trim(bucketName, "/")
 	if bucketName == "" {
 		errMsg := tlog.E(ctx).Msgf("Download aws s3 file (bucket: %s, object key: %s) err (bucket empty)",

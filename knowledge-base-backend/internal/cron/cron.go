@@ -30,8 +30,7 @@ func InitCron(ctx context.Context) *terror.Terror {
 
 	ingestJobWorkerName = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("INGEST_JOB_WORKER_NAME"), "knowledge-base-ingest-worker"))
 	if ingestJobWorkerName == "" {
-		errMsg := tlog.E(ctx).Msgf("Init cron (config key: %s) err (ingest job worker name empty)",
-			"ingest job worker name")
+		errMsg := tlog.E(ctx).Msg("Init cron err (ingest job worker name empty)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("ingest job worker name"), errMsg)
 
@@ -40,8 +39,8 @@ func InitCron(ctx context.Context) *terror.Terror {
 
 	ingestJobBatchLimit = tcfg.DefaultInt(tcfg.LocalKey("INGEST_JOB_BATCH_LIMIT"), 5)
 	if ingestJobBatchLimit <= 0 {
-		errMsg := tlog.E(ctx).Msgf("Init cron (config key: %s, ingest job batch limit: %d) err (ingest job batch limit invalid)",
-			"ingest job batch limit", ingestJobBatchLimit)
+		errMsg := tlog.E(ctx).Msgf("Init cron (batch limit: %d) err (ingest job batch limit invalid)",
+			ingestJobBatchLimit)
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("ingest job batch limit"), errMsg)
 

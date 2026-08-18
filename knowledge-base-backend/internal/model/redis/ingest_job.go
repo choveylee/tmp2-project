@@ -23,15 +23,6 @@ func PushParseIngestJob(ctx context.Context, jobId string) *terror.Terror {
 		return errx
 	}
 
-	if serverClient == nil {
-		errMsg := tlog.E(ctx).Msgf("Push parse ingest job (job id: %s) err (redis client nil)",
-			jobId)
-
-		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("redis client"), constant.ErrorCodeRedisServerAbnormal, errMsg)
-
-		return errx
-	}
-
 	// Redis queue wakes workers quickly; MySQL ingest_jobs remains the source of truth.
 	err := serverClient.Client().RPush(ctx, constant.RedisParseIngestJobQueueKey, jobId).Err()
 	if err != nil {
@@ -48,14 +39,10 @@ func PushParseIngestJob(ctx context.Context, jobId string) *terror.Terror {
 
 func BlockPopParseIngestJobId(ctx context.Context, timeout time.Duration) (string, *terror.Terror) {
 	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-
-	if serverClient == nil {
-		errMsg := tlog.E(ctx).Msgf("Block pop parse ingest job id (timeout: %s) err (redis client nil)",
+		errMsg := tlog.E(ctx).Msgf("Block pop parse ingest job id (timeout: %s) err (timeout invalid)",
 			timeout)
 
-		errx := terror.NewTerror(ctx, terror.ErrConfInvalid("redis client"), constant.ErrorCodeRedisServerAbnormal, errMsg)
+		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("timeout"), constant.ErrorCodeRequestParamInvalid, errMsg)
 
 		return "", errx
 	}

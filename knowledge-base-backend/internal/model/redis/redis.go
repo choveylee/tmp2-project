@@ -31,7 +31,7 @@ func InitRedisModel(ctx context.Context) *terror.Terror {
 
 	serverAddress := tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_REDIS_ADDRESS")), "")
 	if serverAddress == "" {
-		errMsg := tlog.E(ctx).Msg("Redis initialization failed because configuration key server redis address is empty")
+		errMsg := tlog.E(ctx).Msg("Init redis err (server redis address empty)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server redis address"), errMsg)
 
@@ -41,15 +41,32 @@ func InitRedisModel(ctx context.Context) *terror.Terror {
 	serverPassword := tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_REDIS_PASSWORD")), "")
 
 	serverPoolSize := tcfg.DefaultInt(tcfg.LocalKey("SERVER_REDIS_POOLSIZE"), 100)
+	if serverPoolSize <= 0 {
+		errMsg := tlog.E(ctx).Msgf("Init redis (pool size: %d) err (server redis pool size invalid)",
+			serverPoolSize)
+
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server redis pool size"), errMsg)
+
+		return errx
+	}
 
 	var err error
 
 	serverClient, err = tdb.NewRedisClient(ctx, serverAddress, serverPassword, serverPoolSize)
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Redis initialization failed while creating the client for address %q with pool size %d",
-			serverAddress, serverPoolSize)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Init redis (server address: %s, pool size: %d) err (new redis client %v)",
+			serverAddress, serverPoolSize, err)
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)
+
+		return errx
+	}
+
+	if serverClient == nil {
+		errMsg := tlog.E(ctx).Msgf("Init redis (server address: %s, pool size: %d) err (redis client invalid)",
+			serverAddress, serverPoolSize)
+
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("redis client"), errMsg)
 
 		return errx
 	}

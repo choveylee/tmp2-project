@@ -21,7 +21,7 @@ func main() {
 
 	serverDsn := strings.TrimSpace(tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")), ""))
 	if serverDsn == "" {
-		tlog.E(ctx).Msgf("ORM code generation failed because configuration key %s is empty", "server mysql dsn")
+		tlog.E(ctx).Msg("ORM code generation failed (server mysql dsn empty)")
 
 		return
 	}

@@ -28,7 +28,7 @@ func InitMysqlModel(ctx context.Context) *terror.Terror {
 
 	serverDsn := tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")), "")
 	if serverDsn == "" {
-		errMsg := tlog.E(ctx).Msg("MySQL initialization failed because configuration key server mysql dsn is empty")
+		errMsg := tlog.E(ctx).Msg("Init mysql err (server mysql dsn empty)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server mysql dsn"), errMsg)
 
@@ -43,9 +43,16 @@ func InitMysqlModel(ctx context.Context) *terror.Terror {
 		serverClient, err = tdb.NewMysqlClient(ctx, serverDsn)
 	}
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msg("MySQL initialization failed while creating the client")
+		errMsg := tlog.E(ctx).Err(err).Msg("Init mysql err (new mysql client)")
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)
+
+		return errx
+	}
+	if serverClient == nil {
+		errMsg := tlog.E(ctx).Msg("Init mysql err (mysql client invalid)")
+
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("mysql client"), errMsg)
 
 		return errx
 	}
@@ -54,8 +61,8 @@ func InitMysqlModel(ctx context.Context) *terror.Terror {
 
 	err = serverClient.SetMaxIdleConns(maxIdleConns)
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("MySQL initialization failed while setting the maximum idle connection count to %d",
-			maxIdleConns)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Init mysql (max idle conns: %d) err (set max idle conns %v)",
+			maxIdleConns, err)
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)
 
@@ -66,8 +73,8 @@ func InitMysqlModel(ctx context.Context) *terror.Terror {
 
 	err = serverClient.SetMaxOpenConns(maxOpenConns)
 	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("MySQL initialization failed while setting the maximum open connection count to %d",
-			maxOpenConns)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Init mysql (max open conns: %d) err (set max open conns %v)",
+			maxOpenConns, err)
 
 		errx := terror.NewRawTerror(ctx, err, errMsg)
 

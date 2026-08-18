@@ -83,7 +83,12 @@ func StartIngestWorker(ctx context.Context) *terror.Terror {
 
 func RunPendingIngestJob(ctx context.Context, workerName string, limit int) *terror.Terror {
 	if limit <= 0 {
-		return nil
+		errMsg := tlog.E(ctx).Msgf("Run pending ingest job (worker name: %s, limit: %d) err (limit invalid)",
+			workerName, limit)
+
+		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("limit"), constant.ErrorCodeRequestParamInvalid, errMsg)
+
+		return errx
 	}
 
 	ingestJobsDB, errx := dbmodel.FindPendingIngestJobs(ctx, dbmodel.IngestJobTypeParse, limit)
@@ -98,9 +103,9 @@ func RunPendingIngestJob(ctx context.Context, workerName string, limit int) *ter
 	for _, ingestJobDB := range ingestJobsDB {
 		jobId := ingestJobDB.Id
 
-		errx = processParseIngestJobById(ctx, workerName, jobId)
+		errx = redmodel.PushParseIngestJob(ctx, jobId)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Run pending ingest job (worker name: %s, limit: %d, job id: %s) err (process parse ingest job by id %v)",
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Run pending ingest job (worker name: %s, limit: %d, job id: %s) err (redis push parse ingest job %v)",
 				workerName, limit, jobId, errx)
 			errx.AttachErrMsg(errMsg)
 

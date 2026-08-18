@@ -29,7 +29,7 @@ func initTika(ctx context.Context) *terror.Terror {
 
 	tikaClient = thttp.NewHttpClient().WithTimeout(2 * time.Minute)
 	if tikaClient == nil {
-		errMsg := tlog.E(ctx).Msg("Init tika err (tika client nil)")
+		errMsg := tlog.E(ctx).Msg("Init tika err (tika client invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("tika client"), errMsg)
 

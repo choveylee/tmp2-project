@@ -24,8 +24,7 @@ func InitService(ctx context.Context) *terror.Terror {
 
 	ingestJobWorkerName = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("INGEST_JOB_WORKER_NAME"), "knowledge-base-ingest-worker"))
 	if ingestJobWorkerName == "" {
-		errMsg := tlog.E(ctx).Msgf("Init service (config key: %s) err (worker name empty)",
-			"ingest job worker name")
+		errMsg := tlog.E(ctx).Msg("Init service err (ingest job worker name empty)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("ingest job worker name"), errMsg)
 
@@ -34,8 +33,8 @@ func InitService(ctx context.Context) *terror.Terror {
 
 	blockSeconds := tcfg.DefaultInt(tcfg.LocalKey("INGEST_JOB_WORKER_BLOCK_SECONDS"), 5)
 	if blockSeconds <= 0 {
-		errMsg := tlog.E(ctx).Msgf("Init service (config key: %s, block seconds: %d) err (block seconds invalid)",
-			"ingest job worker block seconds", blockSeconds)
+		errMsg := tlog.E(ctx).Msgf("Init service (block seconds: %d) err (ingest job worker block seconds invalid)",
+			blockSeconds)
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("ingest job worker block seconds"), errMsg)
 
@@ -44,8 +43,8 @@ func InitService(ctx context.Context) *terror.Terror {
 
 	errorSeconds := tcfg.DefaultInt(tcfg.LocalKey("INGEST_JOB_WORKER_ERROR_SECONDS"), 3)
 	if errorSeconds <= 0 {
-		errMsg := tlog.E(ctx).Msgf("Init service (config key: %s, error seconds: %d) err (error seconds invalid)",
-			"ingest job worker error seconds", errorSeconds)
+		errMsg := tlog.E(ctx).Msgf("Init service (error seconds: %d) err (ingest job worker error seconds invalid)",
+			errorSeconds)
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("ingest job worker error seconds"), errMsg)
 

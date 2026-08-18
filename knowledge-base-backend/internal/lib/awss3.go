@@ -34,7 +34,7 @@ func AwsS3Bucket() string {
 func initAmazonS3(ctx context.Context) *terror.Terror {
 	awsS3Endpoint := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_ENDPOINT"), ""))
 	if awsS3Endpoint == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 endpoint illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 endpoint invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 endpoint"), errMsg)
 
@@ -43,7 +43,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 
 	awsS3Endpoint2 = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_ENDPOINT2"), ""))
 	if awsS3Endpoint2 == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 endpoint2 illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 endpoint2 invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 endpoint2"), errMsg)
 
@@ -52,7 +52,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 
 	awsS3AccessKey := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_ACCESS_KEY"), ""))
 	if awsS3AccessKey == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 access key illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 access key invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 access key"), errMsg)
 
@@ -61,7 +61,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 
 	awsS3SecretKey := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_SECRET_KEY"), ""))
 	if awsS3SecretKey == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 secret key illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 secret key invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 secret key"), errMsg)
 
@@ -70,7 +70,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 
 	awsS3Bucket = strings.Trim(strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_BUCKET"), "")), "/")
 	if awsS3Bucket == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 bucket illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 bucket invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 bucket"), errMsg)
 
@@ -79,7 +79,7 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 
 	awsS3Region := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("AWSS3_REGION"), "us-east-1"))
 	if awsS3Region == "" {
-		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 region illegal)")
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 region invalid)")
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 region"), errMsg)
 
@@ -107,7 +107,6 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 		options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		options.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
-
 	awsS3PresignClient = s3.NewPresignClient(
 		s3.NewFromConfig(awsConfig, func(options *s3.Options) {
 			options.BaseEndpoint = aws.String(awsS3Endpoint2)
@@ -115,6 +114,14 @@ func initAmazonS3(ctx context.Context) *terror.Terror {
 			options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 			options.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 		}))
+
+	if awsS3Client == nil || awsS3PresignClient == nil {
+		errMsg := tlog.E(ctx).Msg("Init amazon s3 err (aws s3 client invalid)")
+
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("aws s3 client"), errMsg)
+
+		return errx
+	}
 
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

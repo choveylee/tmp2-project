@@ -73,6 +73,19 @@ func main() {
 		return
 	}
 
+	httpPort := tcfg.DefaultInt(tcfg.LocalKey("HTTP_PORT"), 8080)
+	if httpPort <= 0 || httpPort > 65535 {
+		errMsg := tlog.E(ctx).Msgf("Main (http port: %d) err (http port invalid)",
+			httpPort)
+
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("http port"), errMsg)
+
+		tlog.E(ctx).Err(errx).Msgf("Main err (init http port %v)",
+			errx)
+
+		return
+	}
+
 	// Start the resident ingest worker before the compensation cron is registered.
 	errx = service.StartIngestWorker(ctx)
 	if errx != nil {
@@ -98,8 +111,6 @@ func main() {
 
 		return
 	}
-
-	httpPort := tcfg.DefaultInt(tcfg.LocalKey("HTTP_PORT"), 8080)
 
 	go func() {
 		if err := waitForTcpDial(ctx, httpPort, 30*time.Second); err != nil {
@@ -130,8 +141,8 @@ func runMigrate(ctx context.Context) *terror.Terror {
 
 	serverDsn := strings.TrimSpace(tcfg.DefaultString(fmt.Sprintf("%s::%s", runMode, tcfg.LocalKey("SERVER_MYSQL_DSN")), ""))
 	if serverDsn == "" {
-		errMsg := tlog.E(ctx).Msgf("Run migrate (run mode: %s, config key: %s) err (server mysql dsn empty)",
-			runMode, "server mysql dsn")
+		errMsg := tlog.E(ctx).Msgf("Run migrate (run mode: %s) err (server mysql dsn empty)",
+			runMode)
 
 		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server mysql dsn"), errMsg)
 
@@ -257,15 +268,20 @@ func waitForTcpDial(ctx context.Context, port int, timeout time.Duration) error 
 }
 
 // Keep the local health probe URL aligned with HTTP_PORT.
-func resolvePingBaseUrl(httpPort int) string {
+func resolvePingBaseUrl(ctx context.Context, httpPort int) (string, *terror.Terror) {
 	serverPingHost := strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("SERVER_PING_HOST"), ""))
 	if serverPingHost == "" {
-		return fmt.Sprintf("http://127.0.0.1:%d", httpPort)
+		return fmt.Sprintf("http://127.0.0.1:%d", httpPort), nil
 	}
 
 	parsedUrl, err := url.Parse(serverPingHost)
 	if err != nil {
-		return fmt.Sprintf("http://127.0.0.1:%d", httpPort)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Resolve ping base url (server ping host: %s) err (parse url %v)",
+			serverPingHost, err)
+
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server ping host"), errMsg)
+
+		return "", errx
 	}
 
 	if parsedUrl.Scheme == "" {
@@ -277,13 +293,28 @@ func resolvePingBaseUrl(httpPort int) string {
 		parsedUrl.Host = net.JoinHostPort(parsedUrl.Hostname(), strconv.Itoa(httpPort))
 	}
 
-	return strings.TrimSuffix(parsedUrl.String(), "/")
+	return strings.TrimSuffix(parsedUrl.String(), "/"), nil
 }
 
 func pingServer(ctx context.Context, httpPort int) *terror.Terror {
 	pingCount := tcfg.DefaultInt(tcfg.LocalKey("SERVER_PING_COUNT"), 3)
+	if pingCount <= 0 {
+		errMsg := tlog.E(ctx).Msgf("Ping server (ping count: %d) err (ping count invalid)",
+			pingCount)
 
-	baseUrl := resolvePingBaseUrl(httpPort)
+		errx := terror.NewRawTerror(ctx, terror.ErrConfInvalid("server ping count"), errMsg)
+
+		return errx
+	}
+
+	baseUrl, errx := resolvePingBaseUrl(ctx, httpPort)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Ping server (http port: %d) err (resolve ping base url %v)",
+			httpPort, errx)
+		errx.AttachErrMsg(errMsg)
+
+		return errx
+	}
 	pingUrl := baseUrl + "/healthz"
 
 	for i := range pingCount {
@@ -309,7 +340,7 @@ func pingServer(ctx context.Context, httpPort int) *terror.Terror {
 	errMsg := tlog.E(ctx).Err(err).Msgf("Ping server (http port: %d, ping count: %d, ping url: %s) err (get %v)",
 		httpPort, pingCount, pingUrl, err)
 
-	errx := terror.NewRawTerror(ctx, err, errMsg)
+	errx = terror.NewRawTerror(ctx, err, errMsg)
 
 	return errx
 }
