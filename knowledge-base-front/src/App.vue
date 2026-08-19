@@ -10,15 +10,15 @@ import { RouterLink, RouterView } from 'vue-router'
         <div class="app-subtitle">Knowledge bases, documents, and health checks</div>
       </div>
 
-    <nav class="app-nav">
-      <RouterLink to="/knowledge-bases">Knowledge Bases</RouterLink>
-      <RouterLink to="/documents">Documents</RouterLink>
-      <RouterLink to="/monitor">Monitor</RouterLink>
-    </nav>
-  </header>
+      <nav class="app-nav">
+        <RouterLink to="/knowledge-bases">Knowledge Bases</RouterLink>
+        <RouterLink to="/documents">Documents</RouterLink>
+        <RouterLink to="/monitor">Monitor</RouterLink>
+      </nav>
+    </header>
 
-  <main class="app-main">
-    <RouterView />
-  </main>
+    <main class="app-main">
+      <RouterView />
+    </main>
   </div>
 </template>

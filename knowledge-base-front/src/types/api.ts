@@ -23,7 +23,17 @@ export interface ListKnowledgeBasesRespData {
   total: number
 }
 
-export interface GetKnowledgeBaseRespData extends KnowledgeBaseData {}
+export interface GetKnowledgeBaseRespData {
+  knowledge_base_id: string
+  code: string
+  name: string
+  owner_id: string
+  description: string
+  visible: number
+  status: number
+  created_at: string
+  updated_at: string
+}
 
 export interface CreateKnowledgeBaseRequest {
   code: string
@@ -75,6 +85,19 @@ export interface CreateDocumentRespData {
   object_key: string
   process_status: number
   status: number
+}
+
+export interface UploadFileRespData {
+  file_object_id: string
+  bucket_name: string
+  object_key: string
+  file_name: string
+  mime_type: string
+  file_ext: string
+  size_bytes: number
+  sha256: string
+  storage_provider: number
+  created_at: string
 }
 
 export interface FileObjectData {
@@ -130,7 +153,27 @@ export interface ListDocumentsRespData {
   total: number
 }
 
-export interface GetDocumentRespData extends DocumentData {}
+export interface GetDocumentRespData {
+  document_id: string
+  knowledge_base_id?: string
+  chat_session_id?: string
+  scope_type: number
+  source_type: number
+  title: string
+  summary: string
+  tags: string[]
+  owner_id: string
+  lang_code: string
+  cur_version_no: number
+  cur_version_id?: string
+  process_status: number
+  status: number
+  created_at: string
+  updated_at: string
+  current_version?: DocumentVersionData
+  file_object?: FileObjectData
+  latest_job?: IngestJobData
+}
 
 export interface UpdateDocumentRequest {
   title: string
@@ -138,6 +181,20 @@ export interface UpdateDocumentRequest {
   tags: string[]
   lang_code: string
   status: number
+}
+
+export interface CreateDocumentRequest {
+  knowledge_base_id: string
+  chat_session_id: string
+  scope_type: number
+  source_type: number
+  title: string
+  summary: string
+  tags: string[]
+  owner_id: string
+  lang_code: string
+  parse_strategy: number
+  file_object_id: string
 }
 
 export interface UpdateDocumentRespData {

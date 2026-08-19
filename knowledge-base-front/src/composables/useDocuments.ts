@@ -7,15 +7,23 @@ import {
   listDocuments,
   listKnowledgeBases,
   updateDocument,
+  uploadFile,
 } from '@/api'
-import type { DocumentData, KnowledgeBaseData } from '@/types/api'
+import type {
+  CreateDocumentRequest,
+  DocumentData,
+  GetDocumentRespData,
+  KnowledgeBaseData,
+} from '@/types/api'
 import type { DocumentFormDraft } from '@/types/forms'
 import { formatErrorMessage } from '@/utils/errors'
+import { formatFileSize } from '@/utils/number'
 import { splitTagsText } from '@/utils/tags'
 
 const knowledgeBaseOptionsPageSize = 100
 const documentScopeTypeKnowledge = 0
 const documentScopeTypeAttachment = 1
+const maxDocumentUploadSize = 500 * 1024 * 1024
 
 function createDraft(defaultKnowledgeBaseId = ''): DocumentFormDraft {
   return {
@@ -50,7 +58,7 @@ export function useDocuments() {
   const error = shallowRef('')
 
   const selectedId = shallowRef('')
-  const detail = shallowRef<DocumentData | null>(null)
+  const detail = shallowRef<GetDocumentRespData | null>(null)
   const detailLoading = shallowRef(false)
   const detailError = shallowRef('')
 
@@ -61,14 +69,23 @@ export function useDocuments() {
   const isFormOpen = shallowRef(false)
   const formMode = shallowRef<'create' | 'edit'>('create')
   const saving = shallowRef(false)
+  const uploading = shallowRef(false)
   const savingError = shallowRef('')
   const draft = reactive<DocumentFormDraft>(createDraft())
   let draftBaseline = createDraft()
   const selectedFile = shallowRef<File | null>(null)
   let detailRequestSeq = 0
 
-  const selectedItem = computed(() => {
-    return detail.value ?? items.value.find((item) => item.document_id === selectedId.value) ?? null
+  const selectedItem = computed(
+    () => detail.value ?? items.value.find((item) => item.document_id === selectedId.value) ?? null,
+  )
+
+  const selectedFileLabel = computed(() => {
+    if (!selectedFile.value) {
+      return ''
+    }
+
+    return `${selectedFile.value.name} (${formatFileSize(selectedFile.value.size)})`
   })
 
   const pageCount = computed(() => {
@@ -233,6 +250,7 @@ export function useDocuments() {
   function startCreate() {
     formMode.value = 'create'
     savingError.value = ''
+    uploading.value = false
     draftBaseline = createDraft(filters.knowledgeBaseId || knowledgeBaseOptions.value[0]?.value || '')
     resetDraft(draftBaseline.knowledgeBaseId)
     isFormOpen.value = true
@@ -241,8 +259,9 @@ export function useDocuments() {
   function startEdit(item: DocumentData) {
     formMode.value = 'edit'
     savingError.value = ''
+    uploading.value = false
     selectedId.value = item.document_id
-    detail.value = item
+    detail.value = item as GetDocumentRespData
     detailLoading.value = false
     detailError.value = ''
     draftBaseline = {
@@ -265,11 +284,13 @@ export function useDocuments() {
   function closeForm() {
     isFormOpen.value = false
     savingError.value = ''
+    uploading.value = false
     selectedFile.value = null
   }
 
   async function submitForm() {
     saving.value = true
+    uploading.value = false
     savingError.value = ''
 
     try {
@@ -295,27 +316,34 @@ export function useDocuments() {
         if (!file) {
           throw new Error('Document file is required')
         }
-
-        const formData = new FormData()
-        if (draft.knowledgeBaseId.trim()) {
-          formData.set('knowledge_base_id', draft.knowledgeBaseId.trim())
+        if (file.size <= 0) {
+          throw new Error('Document file is empty')
         }
-        if (draft.scopeType === documentScopeTypeAttachment || draft.chatSessionId.trim()) {
-          formData.set('chat_session_id', draft.chatSessionId.trim())
+        if (file.size > maxDocumentUploadSize) {
+          throw new Error('Document file must be 500 MB or smaller')
         }
-        formData.set('scope_type', String(draft.scopeType))
-        formData.set('source_type', String(draft.sourceType))
-        formData.set('title', draft.title.trim())
-        formData.set('summary', draft.summary.trim())
-        formData.set('tags', JSON.stringify(splitTagsText(draft.tagsText)))
-        formData.set('lang_code', draft.langCode.trim())
-        formData.set('parse_strategy', String(draft.parseStrategy))
-        formData.set('status', String(draft.status))
-        formData.set('file', file)
 
-        const response = await createDocument(formData)
+        uploading.value = true
+        const uploadResp = await uploadFile(file)
+
+        const payload = {
+          knowledge_base_id: draft.knowledgeBaseId.trim(),
+          chat_session_id: draft.chatSessionId.trim(),
+          scope_type: draft.scopeType,
+          source_type: draft.sourceType,
+          title: draft.title.trim(),
+          summary: draft.summary.trim(),
+          tags: splitTagsText(draft.tagsText),
+          owner_id: '',
+          lang_code: draft.langCode.trim(),
+          parse_strategy: draft.parseStrategy,
+          file_object_id: uploadResp.file_object_id,
+        } satisfies CreateDocumentRequest
+
+        const response = await createDocument(payload)
         selectedId.value = response.document_id
         draftBaseline = createDraft(draft.knowledgeBaseId)
+        detail.value = null
       } else {
         const documentId = selectedId.value
         if (!documentId) {
@@ -339,6 +367,7 @@ export function useDocuments() {
       savingError.value = formatErrorMessage(err)
     } finally {
       saving.value = false
+      uploading.value = false
     }
   }
 
@@ -400,8 +429,10 @@ export function useDocuments() {
     formMode,
     saving,
     savingError,
+    uploading,
     draft,
     selectedFile,
+    selectedFileLabel,
     pageCount,
     loadList,
     selectItem,
@@ -413,5 +444,6 @@ export function useDocuments() {
     clearFilters,
     search,
     refresh,
+    resetDraft,
   }
 }

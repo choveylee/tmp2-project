@@ -1,7 +1,7 @@
 package constant
 
 const (
-	MaxDocumentUploadSize = 200 * MB
+	MaxDocumentFileUploadSize = 500 * MB
 )
 
 const (

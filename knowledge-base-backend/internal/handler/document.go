@@ -16,6 +16,53 @@ import (
 	"dev.choveylee.top/knowledge-base-backend/internal/service"
 )
 
+func HandleUploadFile(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.MaxDocumentFileUploadSize+constant.MB)
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		errMsg := tlog.E(ctx).Err(err).Msgf("Handle upload file (user id: %s) err (form file %v)",
+			userId, err)
+
+		SendFailResponse(c, constant.ErrorCodeDocumentFileInvalid, errMsg)
+
+		return
+	}
+
+	if fileHeader.Size <= 0 {
+		errMsg := tlog.E(ctx).Msgf("Handle upload file (user id: %s) err (file empty)", userId)
+
+		SendFailResponse(c, constant.ErrorCodeDocumentFileInvalid, errMsg)
+
+		return
+	}
+
+	if fileHeader.Size > constant.MaxDocumentFileUploadSize {
+		errMsg := tlog.E(ctx).Msgf("Handle upload file (user id: %s, file size: %d) err (file size limit)",
+			userId, fileHeader.Size)
+
+		SendFailResponse(c, constant.ErrorCodeDocumentFileInvalid, errMsg)
+
+		return
+	}
+
+	uploadFileRespData, errx := service.UploadFile(ctx, userId, fileHeader)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Handle upload file (user id: %s, file name: %s, file size: %d) err (upload file %v)",
+			userId, strings.TrimSpace(fileHeader.Filename), fileHeader.Size, errx)
+
+		SendFailResponse(c, errx.ErrCode(), errMsg)
+
+		return
+	}
+
+	SendPassResponse(c, uploadFileRespData)
+}
+
 func HandleListDocuments(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -230,90 +277,75 @@ func HandleCreateDocument(c *gin.Context) {
 
 	userId := strings.TrimSpace(c.Request.Header.Get("user_id"))
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.MaxDocumentUploadSize+constant.MB)
+	createDocumentRequest := &data.CreateDocumentRequest{}
 
-	scopeType := dbmodel.DocumentScopeTypeKnowledge
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, constant.RequestBodyMaxSize)
 
-	srcScopeType := strings.TrimSpace(c.PostForm("scope_type"))
-	if srcScopeType != "" {
-		desScopeType, err := strconv.Atoi(srcScopeType)
-		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (scope type: %s) err (strconv atoi %v)",
-				srcScopeType, err)
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (body: %s) err (request body read %v)",
+			string(body), err)
 
-			SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
+		SendFailResponse(c, constant.ErrorCodeRequestBodyInvalid, errMsg)
 
-			return
-		}
-
-		_, ok := dbmodel.DocumentScopeTypesMap[desScopeType]
-		if !ok {
-			errMsg := tlog.E(ctx).Msgf("Handle create document (scope type: %d) err (scope type invalid)",
-				desScopeType)
-
-			SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
-
-			return
-		}
-
-		scopeType = desScopeType
+		return
 	}
 
-	sourceType := dbmodel.DocumentSourceTypeUser
+	err = json.Unmarshal(body, createDocumentRequest)
+	if err != nil {
+		if strings.TrimSpace(string(body)) == "" {
+			errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (body: %s) err (request body empty or unmarshal %v)",
+				string(body), err)
 
-	srcSourceType := strings.TrimSpace(c.PostForm("source_type"))
-	if srcSourceType != "" {
-		desSourceType, err := strconv.Atoi(srcSourceType)
-		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (source type: %s) err (strconv atoi %v)",
-				srcSourceType, err)
-
-			SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
+			SendFailResponse(c, constant.ErrorCodeRequestBodyInvalid, errMsg)
 
 			return
 		}
 
-		_, ok := dbmodel.DocumentSourceTypesMap[desSourceType]
-		if !ok {
-			errMsg := tlog.E(ctx).Msgf("Handle create document (source type: %d) err (source type invalid)",
-				desSourceType)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (body: %s) err (request body unmarshal %v)",
+			string(body), err)
 
-			SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
+		SendFailResponse(c, constant.ErrorCodeRequestBodyInvalid, errMsg)
 
-			return
-		}
-
-		sourceType = desSourceType
+		return
 	}
 
-	parseStrategy := dbmodel.DocumentParseStrategyAuto
+	scopeType := createDocumentRequest.ScopeType
+	_, ok := dbmodel.DocumentScopeTypesMap[scopeType]
+	if !ok {
+		errMsg := tlog.E(ctx).Msgf("Handle create document (scope type: %d) err (scope type invalid)",
+			scopeType)
 
-	srcParseStrategy := strings.TrimSpace(c.PostForm("parse_strategy"))
-	if srcParseStrategy != "" {
-		desParseStrategy, err := strconv.Atoi(srcParseStrategy)
-		if err != nil {
-			errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (parse strategy: %s) err (strconv atoi %v)",
-				srcParseStrategy, err)
+		SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
 
-			SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
-
-			return
-		}
-
-		_, ok := dbmodel.DocumentParseStrategiesMap[desParseStrategy]
-		if !ok {
-			errMsg := tlog.E(ctx).Msgf("Handle create document (parse strategy: %d) err (parse strategy invalid)",
-				desParseStrategy)
-
-			SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
-
-			return
-		}
-
-		parseStrategy = desParseStrategy
+		return
 	}
 
-	knowledgeBaseId := strings.TrimSpace(c.PostForm("knowledge_base_id"))
+	sourceType := createDocumentRequest.SourceType
+	_, ok = dbmodel.DocumentSourceTypesMap[sourceType]
+	if !ok {
+		errMsg := tlog.E(ctx).Msgf("Handle create document (source type: %d) err (source type invalid)",
+			sourceType)
+
+		SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
+
+		return
+	}
+
+	parseStrategy := createDocumentRequest.ParseStrategy
+	_, ok = dbmodel.DocumentParseStrategiesMap[parseStrategy]
+	if !ok {
+		errMsg := tlog.E(ctx).Msgf("Handle create document (parse strategy: %d) err (parse strategy invalid)",
+			parseStrategy)
+
+		SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
+
+		return
+	}
+
+	knowledgeBaseId := strings.TrimSpace(createDocumentRequest.KnowledgeBaseId)
+	chatSessionId := strings.TrimSpace(createDocumentRequest.ChatSessionId)
+
 	if scopeType == dbmodel.DocumentScopeTypeKnowledge && knowledgeBaseId == "" {
 		errMsg := tlog.E(ctx).Msgf("Handle create document err (knowledge base id empty)")
 
@@ -322,7 +354,6 @@ func HandleCreateDocument(c *gin.Context) {
 		return
 	}
 
-	chatSessionId := strings.TrimSpace(c.PostForm("chat_session_id"))
 	if scopeType == dbmodel.DocumentScopeTypeAttachment && chatSessionId == "" {
 		errMsg := tlog.E(ctx).Msgf("Handle create document err (chat session id empty)")
 
@@ -331,7 +362,7 @@ func HandleCreateDocument(c *gin.Context) {
 		return
 	}
 
-	title := strings.TrimSpace(c.PostForm("title"))
+	title := strings.TrimSpace(createDocumentRequest.Title)
 	if len(title) > dbmodel.DocumentTitleLenLimit {
 		errMsg := tlog.E(ctx).Msgf("Handle create document (title: %s) err (title len limit)",
 			title)
@@ -341,7 +372,7 @@ func HandleCreateDocument(c *gin.Context) {
 		return
 	}
 
-	summary := strings.TrimSpace(c.PostForm("summary"))
+	summary := strings.TrimSpace(createDocumentRequest.Summary)
 	if len(summary) > dbmodel.DocumentSummaryLenLimit {
 		errMsg := tlog.E(ctx).Msgf("Handle create document (summary: %s) err (summary len limit)",
 			summary)
@@ -351,31 +382,11 @@ func HandleCreateDocument(c *gin.Context) {
 		return
 	}
 
-	tags := make([]string, 0)
-
-	srcTags := strings.TrimSpace(c.PostForm("tags"))
-	if srcTags != "" {
-		if strings.HasPrefix(srcTags, "[") {
-			err := json.Unmarshal([]byte(srcTags), &tags)
-			if err != nil {
-				errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document (tags: %s) err (tags unmarshal %v)",
-					srcTags, err)
-
-				SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
-
-				return
-			}
-		} else {
-			tags = strings.Split(srcTags, ",")
-		}
-	}
-
+	tags := make([]string, 0, len(createDocumentRequest.Tags))
 	tagsMap := make(map[string]bool)
 
-	for index, tag := range tags {
+	for _, tag := range createDocumentRequest.Tags {
 		tag = strings.TrimSpace(tag)
-		tags[index] = tag
-
 		if tag == "" {
 			errMsg := tlog.E(ctx).Msgf("Handle create document err (tag empty)")
 
@@ -394,6 +405,7 @@ func HandleCreateDocument(c *gin.Context) {
 			return
 		}
 
+		tags = append(tags, tag)
 		tagsMap[tag] = true
 	}
 
@@ -407,7 +419,7 @@ func HandleCreateDocument(c *gin.Context) {
 		return
 	}
 
-	ownerId := strings.TrimSpace(c.PostForm("owner_id"))
+	ownerId := strings.TrimSpace(createDocumentRequest.OwnerId)
 	if userId != "" {
 		ownerId = userId
 	}
@@ -415,7 +427,7 @@ func HandleCreateDocument(c *gin.Context) {
 		ownerId = constant.DefaultAnonymousOwnerId
 	}
 
-	langCode := strings.TrimSpace(c.PostForm("lang_code"))
+	langCode := strings.TrimSpace(createDocumentRequest.LangCode)
 	if len(langCode) > dbmodel.DocumentLangCodeLen {
 		errMsg := tlog.E(ctx).Msgf("Handle create document (lang code: %s) err (lang code len limit)",
 			langCode)
@@ -428,37 +440,9 @@ func HandleCreateDocument(c *gin.Context) {
 		langCode = constant.DefaultDocumentLangCode
 	}
 
-	fileHeader, err := c.FormFile("file")
-	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Handle create document err (form file %v)",
-			err)
-
-		SendFailResponse(c, constant.ErrorCodeDocumentFileInvalid, errMsg)
-
-		return
-	}
-
-	if fileHeader.Size <= 0 {
-		errMsg := tlog.E(ctx).Msgf("Handle create document err (file empty)")
-
-		SendFailResponse(c, constant.ErrorCodeDocumentFileInvalid, errMsg)
-
-		return
-	}
-
-	if fileHeader.Size > constant.MaxDocumentUploadSize {
-		errMsg := tlog.E(ctx).Msgf("Handle create document (file size: %d) err (file size limit)",
-			fileHeader.Size)
-
-		SendFailResponse(c, constant.ErrorCodeDocumentFileInvalid, errMsg)
-
-		return
-	}
-
-	fileHeader.Filename = strings.TrimSpace(fileHeader.Filename)
-	if len(fileHeader.Filename) > dbmodel.FileObjectFileNameLen {
-		errMsg := tlog.E(ctx).Msgf("Handle create document (file name: %s) err (file name len limit)",
-			fileHeader.Filename)
+	fileObjectId := strings.TrimSpace(createDocumentRequest.FileObjectId)
+	if fileObjectId == "" {
+		errMsg := tlog.E(ctx).Msgf("Handle create document err (file object id empty)")
 
 		SendFailResponse(c, constant.ErrorCodeRequestParamInvalid, errMsg)
 
@@ -466,10 +450,10 @@ func HandleCreateDocument(c *gin.Context) {
 	}
 
 	createDocumentRespData, errx := service.CreateDocument(ctx, userId, knowledgeBaseId, chatSessionId, scopeType, sourceType,
-		title, summary, tags, ownerId, langCode, parseStrategy, fileHeader)
+		title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId)
 	if errx != nil {
-		errMsg := tlog.E(ctx).Err(errx).Msgf("Handle create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (create document %v)",
-			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileHeader.Filename, fileHeader.Size, errx)
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Handle create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file object id: %s) err (create document %v)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId, errx)
 
 		SendFailResponse(c, errx.ErrCode(), errMsg)
 

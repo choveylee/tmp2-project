@@ -19,6 +19,7 @@ const props = defineProps<{
   parseStrategy: number
   status: number
   fileName: string
+  fileLabel: string
   fileRequired: boolean
   knowledgeBaseOptions: { value: string; label: string }[]
 }>()
@@ -166,6 +167,15 @@ const emit = defineEmits<{
     <div class="notice soft-row">
       <span>File</span>
       <strong>{{ props.fileName || (props.fileRequired ? 'Required' : '-') }}</strong>
+    </div>
+
+    <div v-if="props.fileLabel" class="notice soft-row">
+      <span>Selected</span>
+      <strong>{{ props.fileLabel }}</strong>
+    </div>
+
+    <div v-if="props.mode === 'create'" class="muted">
+      Upload runs first, then the document is created with the returned file object.
     </div>
   </div>
 </template>

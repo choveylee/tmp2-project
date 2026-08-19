@@ -1,4 +1,5 @@
 import type {
+  CreateDocumentRequest,
   CreateKnowledgeBaseRequest,
   CreateKnowledgeBaseRespData,
   CreateDocumentRespData,
@@ -11,6 +12,7 @@ import type {
   ListKnowledgeBasesRespData,
   UpdateDocumentRequest,
   UpdateKnowledgeBaseRequest,
+  UploadFileRespData,
 } from '@/types/api'
 
 import { requestFormData, requestJson } from './client'
@@ -83,11 +85,21 @@ export async function listDocuments(params: {
 }
 
 export async function getDocument(documentId: string) {
-  return requestJson<DocumentData>(`/api/v1/documents/${encodeURIComponent(documentId)}`)
+  return requestJson<GetDocumentRespData>(`/api/v1/documents/${encodeURIComponent(documentId)}`)
 }
 
-export async function createDocument(formData: FormData) {
-  return requestFormData<CreateDocumentRespData>('/api/v1/documents', formData)
+export async function uploadFile(file: File) {
+  const formData = new FormData()
+  formData.set('file', file)
+
+  return requestFormData<UploadFileRespData>('/api/v1/files', formData)
+}
+
+export async function createDocument(payload: CreateDocumentRequest) {
+  return requestJson<CreateDocumentRespData>('/api/v1/documents', {
+    method: 'POST',
+    body: payload,
+  })
 }
 
 export async function updateDocument(documentId: string, payload: UpdateDocumentRequest) {

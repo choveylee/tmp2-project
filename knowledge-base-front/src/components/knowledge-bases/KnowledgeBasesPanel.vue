@@ -5,7 +5,11 @@ import KnowledgeBaseDetail from './KnowledgeBaseDetail.vue'
 import KnowledgeBaseModal from './KnowledgeBaseModal.vue'
 import KnowledgeBaseTable from './KnowledgeBaseTable.vue'
 import { useKnowledgeBases } from '@/composables/useKnowledgeBases'
-import { knowledgeBaseStatusOptions, knowledgeBaseVisibleOptions } from '@/constants/lookups'
+import {
+  knowledgeBaseStatusOptions,
+  knowledgeBaseVisibleOptions,
+  listPageSizeOptions,
+} from '@/constants/lookups'
 
 const {
   filters,
@@ -34,6 +38,11 @@ const {
   search,
   refresh,
 } = useKnowledgeBases()
+
+function handlePage(pageNum: number) {
+  filters.pageNum = pageNum
+  void refresh()
+}
 
 const selectedSummary = computed(() => {
   if (!selectedItem.value) {
@@ -91,6 +100,15 @@ const selectedSummary = computed(() => {
           </select>
         </label>
 
+        <label class="field">
+          <span>Page Size</span>
+          <select v-model.number="filters.pageSize" @change="search">
+            <option v-for="item in listPageSizeOptions" :key="item.value" :value="item.value">
+              {{ item.label }}
+            </option>
+          </select>
+        </label>
+
         <div class="toolbar filter-actions">
           <button type="button" class="primary" @click="search">Search</button>
           <button type="button" @click="clearFilters">Clear</button>
@@ -110,9 +128,9 @@ const selectedSummary = computed(() => {
         :page-count="pageCount"
         @select="selectItem"
         @edit="startEdit"
-          @remove="removeItem"
-          @page="filters.pageNum = $event"
-        />
+        @remove="removeItem"
+        @page="handlePage"
+      />
 
       <div class="stack">
         <KnowledgeBaseDetail :item="selectedItem" :loading="detailLoading" :error="detailError" />

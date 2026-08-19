@@ -19,7 +19,9 @@ const props = defineProps<{
   parseStrategy: number
   status: number
   fileName: string
+  fileLabel: string
   fileRequired: boolean
+  uploading: boolean
   knowledgeBaseOptions: { value: string; label: string }[]
 }>()
 
@@ -43,10 +45,10 @@ const emit = defineEmits<{
 const title = computed(() => (props.mode === 'create' ? 'Create document' : 'Edit document'))
 const subtitle = computed(() =>
   props.mode === 'create'
-    ? 'Upload a source file and set the parsing metadata in one pass.'
+    ? 'Upload the source file first, then create the document record with its file object.'
     : 'Adjust metadata only. The uploaded file is preserved.',
 )
-const submitLabel = computed(() => (props.mode === 'create' ? 'Upload' : 'Save changes'))
+const submitLabel = computed(() => (props.mode === 'create' ? 'Create document' : 'Save changes'))
 const resetLabel = computed(() => (props.mode === 'create' ? 'Reset' : 'Reset changes'))
 
 function onKeydown(event: KeyboardEvent) {
@@ -109,6 +111,7 @@ onBeforeUnmount(() => {
               :parse-strategy="props.parseStrategy"
               :status="props.status"
               :file-name="props.fileName"
+              :file-label="props.fileLabel"
               :file-required="props.fileRequired"
               :knowledge-base-options="props.knowledgeBaseOptions"
               @update:knowledgeBaseId="emit('update:knowledgeBaseId', $event)"
@@ -130,7 +133,7 @@ onBeforeUnmount(() => {
             <div class="toolbar">
               <button type="button" :disabled="props.saving" @click="emit('close')">Cancel</button>
               <button type="button" class="primary" :disabled="props.saving" @click="emit('submit')">
-                {{ props.saving ? 'Saving...' : submitLabel }}
+                {{ props.saving ? (props.uploading ? 'Uploading...' : 'Saving...') : submitLabel }}
               </button>
             </div>
           </footer>

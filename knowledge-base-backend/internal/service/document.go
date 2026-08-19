@@ -10,6 +10,7 @@ import (
 
 	"github.com/choveylee/terror"
 	"github.com/choveylee/tlog"
+	"github.com/choveylee/tutil"
 	"gorm.io/gorm"
 
 	constant "dev.choveylee.top/knowledge-base-backend/internal/const"
@@ -18,6 +19,79 @@ import (
 	dbmodel "dev.choveylee.top/knowledge-base-backend/internal/model/mysql"
 	redmodel "dev.choveylee.top/knowledge-base-backend/internal/model/redis"
 )
+
+func UploadFile(ctx context.Context, userId string, fileHeader *multipart.FileHeader) (*data.UploadFileRespData, *terror.Terror) {
+	if fileHeader == nil {
+		errMsg := tlog.E(ctx).Msgf("Upload file (user id: %s) err (file header nil)", userId)
+
+		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("file"), constant.ErrorCodeDocumentFileInvalid, errMsg)
+
+		return nil, errx
+	}
+
+	originFileName := strings.TrimSpace(fileHeader.Filename)
+	if originFileName == "" {
+		originFileName = "unnamed"
+	}
+
+	bucketName := lib.AwsS3Bucket()
+	mimeType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	if len(mimeType) > dbmodel.FileObjectMimeTypeLen {
+		mimeType = mimeType[:dbmodel.FileObjectMimeTypeLen]
+	}
+
+	fileExt := strings.TrimPrefix(strings.ToLower(path.Ext(originFileName)), ".")
+	if len(fileExt) > dbmodel.FileObjectFileExtLen {
+		fileExt = fileExt[:dbmodel.FileObjectFileExtLen]
+	}
+	if fileExt == "" {
+		fileExt = "bin"
+	}
+
+	objectFileName := lib.SanitizeAwsS3FileName(originFileName)
+	objectKey := path.Join("uploads", time.Now().Format("2006"), time.Now().Format("01"), time.Now().Format("02"), tutil.NewOid().String(), objectFileName)
+
+	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, objectFileName, fileHeader)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Upload file (user id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file size: %d) err (upload aws s3 file %v)",
+			userId, bucketName, objectKey, originFileName, mimeType, fileHeader.Size, errx)
+		errx.AttachErrMsg(errMsg)
+
+		return nil, errx
+	}
+
+	fileObjectDB, errx := dbmodel.CreateFileObject(ctx, bucketName, objectKey, originFileName, mimeType, fileExt, uint64(fileHeader.Size), sha256Value, dbmodel.FileObjectStorageProviderSeaweedFS)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Upload file (user id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file size: %d, sha256: %s) err (db create file object %v)",
+			userId, bucketName, objectKey, originFileName, mimeType, fileHeader.Size, sha256Value, errx)
+		errx.AttachErrMsg(errMsg)
+
+		return nil, errx
+	}
+
+	uploadFileRespData := &data.UploadFileRespData{
+		FileObjectId: fileObjectDB.Id,
+
+		BucketName: bucketName,
+		ObjectKey:  objectKey,
+
+		FileName: originFileName,
+		MimeType: mimeType,
+		FileExt:  fileExt,
+
+		SizeBytes: uint64(fileHeader.Size),
+		Sha256:    sha256Value,
+
+		StorageProvider: dbmodel.FileObjectStorageProviderSeaweedFS,
+
+		CreatedAt: fileObjectDB.CreatedAt.Format(time.RFC3339),
+	}
+
+	return uploadFileRespData, nil
+}
 
 func ListDocuments(ctx context.Context, userId, knowledgeBaseId, keyword string, scopeType, sourceType, processStatus, status int, pageNum, pageSize int) (*data.ListDocumentsRespData, *terror.Terror) {
 	total, documentsDB, errx := dbmodel.FindDocuments(ctx, knowledgeBaseId, keyword, scopeType, sourceType, processStatus, status, pageNum, pageSize)
@@ -105,8 +179,8 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 
 	curVersionId := documentDB.CurVersionId
 
-	// Build the main document payload first, then enrich it with current version details.
-	documentData := &data.DocumentData{
+	// Build the detail payload first, then enrich it with current version details.
+	getDocumentRespData := &data.GetDocumentRespData{
 		DocumentId: documentDB.Id,
 
 		KnowledgeBaseId: documentDB.KnowledgeBaseId,
@@ -174,7 +248,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 				UpdatedAt: documentVersionDB.UpdatedAt.Format(time.RFC3339),
 			}
 
-			documentData.CurrentVersion = documentVersionData
+			getDocumentRespData.CurrentVersion = documentVersionData
 
 			fileObjectDB, errx := dbmodel.FindFileObject(ctx, fileObjectId)
 			if errx != nil {
@@ -204,7 +278,7 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 					CreatedAt: fileObjectDB.CreatedAt.Format(time.RFC3339),
 				}
 
-				documentData.FileObject = fileObjectData
+				getDocumentRespData.FileObject = fileObjectData
 			}
 		}
 	}
@@ -247,35 +321,48 @@ func GetDocument(ctx context.Context, userId string, documentId string) (*data.G
 			ingestJobData.FinishedAt = ingestJobDB.FinishedAt.Format(time.RFC3339)
 		}
 
-		documentData.LatestJob = ingestJobData
-	}
-
-	getDocumentRespData := &data.GetDocumentRespData{
-		DocumentData: documentData,
+		getDocumentRespData.LatestJob = ingestJobData
 	}
 
 	return getDocumentRespData, nil
 }
 
 func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId string, scopeType, sourceType int,
-	title, summary string, tags []string, ownerId, langCode string, parseStrategy int, fileHeader *multipart.FileHeader) (*data.CreateDocumentRespData, *terror.Terror) {
-	originFileName := strings.TrimSpace(fileHeader.Filename)
-	fileSize := fileHeader.Size
+	title, summary string, tags []string, ownerId, langCode string, parseStrategy int, fileObjectId string) (*data.CreateDocumentRespData, *terror.Terror) {
+	fileObjectId = strings.TrimSpace(fileObjectId)
+
+	fileObjectDB, errx := dbmodel.FindFileObject(ctx, fileObjectId)
+	if errx != nil {
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file object id: %s) err (db find file object %v)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId, errx)
+		errx.AttachErrMsg(errMsg)
+
+		return nil, errx
+	}
+
+	if fileObjectDB == nil {
+		errMsg := tlog.E(ctx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file object id: %s) err (file object not found)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId)
+
+		errx := terror.NewTerror(ctx, terror.ErrParamInvalid("file_object_id"), constant.ErrorCodeDocumentFileInvalid, errMsg)
+
+		return nil, errx
+	}
 
 	if scopeType == dbmodel.DocumentScopeTypeKnowledge {
 		// Knowledge documents must reference an existing knowledge base; attachments do not.
 		knowledgeBaseDB, errx := dbmodel.FindKnowledgeBase(ctx, knowledgeBaseId)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db find knowledge base %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file object id: %s) err (db find knowledge base %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return nil, errx
 		}
 
 		if knowledgeBaseDB == nil {
-			errMsg := tlog.E(ctx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (knowledge base not found)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, originFileName, fileSize)
+			errMsg := tlog.E(ctx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file object id: %s) err (knowledge base not found)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId)
 
 			errx := terror.NewTerror(ctx, terror.ErrParamInvalid("knowledge_base_id"), constant.ErrorCodeKnowledgeBaseNotFound, errMsg)
 
@@ -284,28 +371,10 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 	}
 
 	if title == "" {
-		title = strings.TrimSpace(strings.TrimSuffix(originFileName, path.Ext(originFileName)))
+		title = strings.TrimSpace(strings.TrimSuffix(fileObjectDB.FileName, path.Ext(fileObjectDB.FileName)))
 	}
 	if title == "" {
 		title = "unnamed"
-	}
-
-	bucketName := lib.AwsS3Bucket()
-
-	mimeType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-	if len(mimeType) > dbmodel.FileObjectMimeTypeLen {
-		mimeType = mimeType[:dbmodel.FileObjectMimeTypeLen]
-	}
-
-	fileExt := strings.TrimPrefix(strings.ToLower(path.Ext(originFileName)), ".")
-	if len(fileExt) > dbmodel.FileObjectFileExtLen {
-		fileExt = fileExt[:dbmodel.FileObjectFileExtLen]
-	}
-	if fileExt == "" {
-		fileExt = "bin"
 	}
 
 	ocrStatus := dbmodel.DocumentVersionOcrStatusNotRequired
@@ -313,45 +382,30 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		ocrStatus = dbmodel.DocumentVersionOcrStatusPending
 	}
 
-	// The first transaction creates placeholder records so document/version/file IDs are available.
-	var errx *terror.Terror
-
 	var documentDB *dbmodel.Document
 	var documentVersionDB *dbmodel.DocumentVersion
-	var fileObjectDB *dbmodel.FileObject
+	var ingestJobDB *dbmodel.IngestJob
 
 	documentId := ""
 	versionId := ""
-	fileObjectId := ""
 
 	err := dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
 		documentDB, errx = dbmodel.CreateDocumentTx(ctx, tx, knowledgeBaseId, chatSessionId, scopeType, sourceType,
-			title, summary, tags, ownerId, langCode, 0, "", dbmodel.DocumentProcessStatusWaiting, dbmodel.DocumentStatusNormal)
+			title, summary, tags, ownerId, langCode, 0, "", dbmodel.DocumentProcessStatusUploaded, dbmodel.DocumentStatusNormal)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, file object id: %s) err (db create document %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, fileObjectId, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
 		}
 		documentId = documentDB.Id
 
-		fileObjectDB, errx = dbmodel.CreateFileObjectTx(ctx, tx, bucketName, "", originFileName, mimeType, fileExt,
-			uint64(fileSize), "", dbmodel.FileObjectStorageProviderSeaweedFS)
-		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, originFileName, fileSize, errx)
-			errx.AttachErrMsg(errMsg)
-
-			return errx
-		}
-		fileObjectId = fileObjectDB.Id
-
 		documentVersionDB, errx = dbmodel.CreateDocumentVersionTx(ctx, tx, documentId, 1, fileObjectId, parseStrategy,
-			dbmodel.DocumentParserTypeUnknown, "", 0, 0, 0, dbmodel.DocumentVersionParseStatusPending, "", ocrStatus, "")
+			dbmodel.DocumentParserTypeUnknown, fileObjectDB.Sha256, 0, 0, 0, dbmodel.DocumentVersionParseStatusPending, "", ocrStatus, "")
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, fileObjectId, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, file object id: %s) err (db create document version %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, fileObjectId, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -360,93 +414,26 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 		errx = dbmodel.UpdateDocumentCurrentVersionTx(ctx, tx, documentId, documentVersionDB.VersionNo, versionId)
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s) err (db update document current version %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
 		}
 
-		return nil
-	})
-	if err != nil {
-		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, file name: %s, file size: %d) err (db prepare document records transaction %v)",
-			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, originFileName, fileSize, err)
-
-		if errx != nil {
-			errx.AttachErrMsg(errMsg)
-		} else {
-			errx = terror.NewTerror(ctx, err, constant.ErrorCodeMysqlServerAbnormal, errMsg)
-		}
-
-		return nil, errx
-	}
-
-	objectFileName := fileObjectId + "." + fileExt
-
-	// Object storage names use generated IDs; the original filename stays in DB for display.
-	objectKey := lib.BuildAwsS3RawObjectKey(knowledgeBaseId, chatSessionId, documentId, versionId, objectFileName, time.Now())
-
-	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, objectFileName, fileHeader)
-	if errx != nil {
-		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, object file name: %s, file name: %s, file size: %d) err (lib upload aws s3 file %v)",
-			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, objectFileName, originFileName, fileSize, errx)
-		errx.AttachErrMsg(errMsg)
-
-		// Upload failure only needs one status update, so avoid wrapping it in a transaction.
-		errx2 := dbmodel.UpdateDocumentProcessStatus(ctx, documentId, dbmodel.DocumentProcessStatusFailed)
-		if errx2 != nil {
-			errMsg := tlog.E(ctx).Err(errx2).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, file name: %s, file size: %d) err (db mark document upload failed %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, originFileName, fileSize, errx2)
-			errx2.AttachErrMsg(errMsg)
-		}
-
-		return nil, errx
-	}
-
-	jobPayloadBytes, _ := json.Marshal(map[string]string{
-		"bucket_name": bucketName,
-		"object_key":  objectKey,
-	})
-
-	jobPayload := string(jobPayloadBytes)
-
-	var ingestJobDB *dbmodel.IngestJob
-
-	// The second transaction completes storage metadata and creates the async parse job.
-	err = dbmodel.DB(ctx).Transaction(func(tx *gorm.DB) error {
-		errx = dbmodel.UpdateFileObjectStorageInfoTx(ctx, tx, fileObjectId, objectKey, sha256Value)
-		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update file object storage info %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
-			errx.AttachErrMsg(errMsg)
-
-			return errx
-		}
-
-		errx = dbmodel.UpdateDocumentVersionContentSha256Tx(ctx, tx, versionId, sha256Value)
-		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document version content sha256 %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
-			errx.AttachErrMsg(errMsg)
-
-			return errx
-		}
-
-		errx = dbmodel.UpdateDocumentProcessStatusTx(ctx, tx, documentId, dbmodel.DocumentProcessStatusUploaded)
-		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db update document process status %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
-			errx.AttachErrMsg(errMsg)
-
-			return errx
-		}
+		jobPayloadBytes, _ := json.Marshal(struct {
+			BucketName string `json:"bucket_name"`
+			ObjectKey  string `json:"object_key"`
+		}{
+			BucketName: fileObjectDB.BucketName,
+			ObjectKey:  fileObjectDB.ObjectKey,
+		})
 
 		ingestJobDB, errx = dbmodel.CreateIngestJobTx(ctx, tx, documentId, versionId, dbmodel.IngestJobTypeParse,
-			dbmodel.IngestJobStatusPending, 0, "", "", jobPayload)
+			dbmodel.IngestJobStatusPending, 0, "", "", string(jobPayloadBytes))
 		if errx != nil {
-			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db create ingest job %v)",
-				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+			errMsg := tlog.E(ctx).Err(errx).Msgf("Create document tx (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s) err (db create ingest job %v)",
+				userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, errx)
 			errx.AttachErrMsg(errMsg)
 
 			return errx
@@ -455,13 +442,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		return nil
 	})
 	if err != nil {
-		jobId := ""
-		if ingestJobDB != nil {
-			jobId = ingestJobDB.Id
-		}
-
-		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (db complete document upload transaction %v)",
-			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, jobId, bucketName, objectKey, sha256Value, originFileName, fileSize, err)
+		errMsg := tlog.E(ctx).Err(err).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s) err (db create document transaction %v)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, err)
 
 		if errx != nil {
 			errx.AttachErrMsg(errMsg)
@@ -474,8 +456,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 
 	errx = redmodel.PushParseIngestJob(ctx, ingestJobDB.Id)
 	if errx != nil {
-		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s, bucket: %s, object key: %s, sha256: %s, file name: %s, file size: %d) err (redis push parse ingest job %v)",
-			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, ingestJobDB.Id, bucketName, objectKey, sha256Value, originFileName, fileSize, errx)
+		errMsg := tlog.E(ctx).Err(errx).Msgf("Create document (user id: %s, knowledge base id: %s, chat session id: %s, scope type: %d, source type: %d, title: %s, summary: %s, tags: %v, owner id: %s, lang code: %s, parse strategy: %d, document id: %s, version id: %s, file object id: %s, job id: %s) err (redis push parse ingest job %v)",
+			userId, knowledgeBaseId, chatSessionId, scopeType, sourceType, title, summary, tags, ownerId, langCode, parseStrategy, documentId, versionId, fileObjectId, ingestJobDB.Id, errx)
 		errx.AttachErrMsg(errMsg)
 	}
 
@@ -486,8 +468,8 @@ func CreateDocument(ctx context.Context, userId, knowledgeBaseId, chatSessionId 
 		FileObjectId: fileObjectId,
 		JobId:        ingestJobDB.Id,
 
-		BucketName: bucketName,
-		ObjectKey:  objectKey,
+		BucketName: fileObjectDB.BucketName,
+		ObjectKey:  fileObjectDB.ObjectKey,
 
 		ProcessStatus: dbmodel.DocumentProcessStatusUploaded,
 		Status:        dbmodel.DocumentStatusNormal,

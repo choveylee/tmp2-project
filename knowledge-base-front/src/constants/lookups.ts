@@ -14,6 +14,13 @@ export const knowledgeBaseStatusOptions: OptionItem[] = [
   { value: 1, label: 'Normal' },
 ]
 
+export const listPageSizeOptions: OptionItem[] = [
+  { value: 10, label: '10 / page' },
+  { value: 20, label: '20 / page' },
+  { value: 50, label: '50 / page' },
+  { value: 100, label: '100 / page' },
+]
+
 export const documentScopeTypeOptions: OptionItem[] = [
   { value: 0, label: 'Knowledge' },
   { value: 1, label: 'Attachment' },

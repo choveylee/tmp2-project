@@ -24,5 +24,5 @@ const (
 
 const (
 	SortSeqAsc  = "asc"
-	SortSeqDesc = "des"
+	SortSeqDesc = "desc"
 )

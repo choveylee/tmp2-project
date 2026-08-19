@@ -7,6 +7,8 @@ import (
 )
 
 func registerDocument(router *gin.RouterGroup) {
+	router.POST("/files", handler.HandleUploadFile)
+
 	router.GET("/documents", handler.HandleListDocuments)
 
 	router.GET("/documents/:id", handler.HandleGetDocument)

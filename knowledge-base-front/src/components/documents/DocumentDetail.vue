@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DocumentData } from '@/types/api'
+import type { GetDocumentRespData } from '@/types/api'
 import { formatDateTime } from '@/utils/time'
 import {
   documentParseStrategyOptions,
@@ -13,7 +13,7 @@ import {
 } from '@/constants/lookups'
 
 defineProps<{
-  item: DocumentData | null
+  item: GetDocumentRespData | null
   loading: boolean
   error: string
 }>()

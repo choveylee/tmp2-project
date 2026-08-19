@@ -5,7 +5,13 @@ import DocumentDetail from './DocumentDetail.vue'
 import DocumentModal from './DocumentModal.vue'
 import DocumentTable from './DocumentTable.vue'
 import { useDocuments } from '@/composables/useDocuments'
-import { documentProcessStatusOptions, documentScopeTypeOptions, documentSourceTypeOptions, documentStatusOptions } from '@/constants/lookups'
+import {
+  documentProcessStatusOptions,
+  documentScopeTypeOptions,
+  documentSourceTypeOptions,
+  documentStatusOptions,
+  listPageSizeOptions,
+} from '@/constants/lookups'
 
 const {
   filters,
@@ -22,9 +28,11 @@ const {
   isFormOpen,
   formMode,
   saving,
+  uploading,
   savingError,
   draft,
   selectedFile,
+  selectedFileLabel,
   pageCount,
   selectItem,
   startCreate,
@@ -35,7 +43,13 @@ const {
   clearFilters,
   search,
   refresh,
+  resetDraft,
 } = useDocuments()
+
+function handlePage(pageNum: number) {
+  filters.pageNum = pageNum
+  void refresh()
+}
 
 const selectedSummary = computed(() => {
   if (!selectedItem.value) {
@@ -53,7 +67,7 @@ const selectedSummary = computed(() => {
         <div class="stack-tight">
           <p class="eyebrow">Document library</p>
           <h2 class="section-title">Documents</h2>
-          <p class="muted">Upload files, tune metadata, and inspect parse and ingest state.</p>
+          <p class="muted">Upload a file, then create the document record and inspect parse state.</p>
         </div>
         <div class="toolbar">
           <button type="button" class="primary" @click="startCreate">New Document</button>
@@ -123,6 +137,15 @@ const selectedSummary = computed(() => {
           </select>
         </label>
 
+        <label class="field">
+          <span>Page Size</span>
+          <select v-model.number="filters.pageSize" @change="search">
+            <option v-for="item in listPageSizeOptions" :key="item.value" :value="item.value">
+              {{ item.label }}
+            </option>
+          </select>
+        </label>
+
         <div class="toolbar filter-actions">
           <button type="button" class="primary" @click="search">Search</button>
           <button type="button" @click="clearFilters">Clear</button>
@@ -144,7 +167,7 @@ const selectedSummary = computed(() => {
         @select="selectItem"
         @edit="startEdit"
         @remove="removeItem"
-        @page="filters.pageNum = $event"
+        @page="handlePage"
       />
 
       <div class="stack">
@@ -168,11 +191,13 @@ const selectedSummary = computed(() => {
       :parse-strategy="draft.parseStrategy"
       :status="draft.status"
       :file-name="selectedFile?.name || ''"
+      :file-label="selectedFileLabel"
       :file-required="formMode === 'create'"
+      :uploading="uploading"
       :knowledge-base-options="knowledgeBaseOptions"
       @close="closeForm"
       @submit="submitForm"
-      @reset="startCreate"
+      @reset="resetDraft"
       @update:knowledgeBaseId="draft.knowledgeBaseId = $event"
       @update:chatSessionId="draft.chatSessionId = $event"
       @update:scopeType="draft.scopeType = $event"
