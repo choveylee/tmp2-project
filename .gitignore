@@ -4,3 +4,7 @@ knowledge-base-backend/.idea/knowledge-base-backend.iml
 knowledge-base-backend/.idea/modules.xml
 knowledge-base-backend/build/.keeper
 knowledge-base-backend/.idea/vcs.xml
+knowledge-base-backend/cmd/knowledge_base_backend
+knowledge-base-front/node_modules
+knowledge-base-front/dist
+.DS_Store
