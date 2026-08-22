@@ -51,10 +51,10 @@ func UploadFile(ctx context.Context, userId string, fileHeader *multipart.FileHe
 		fileExt = "bin"
 	}
 
-	objectFileName := lib.SanitizeAwsS3FileName(originFileName)
-	objectKey := path.Join("uploads", time.Now().Format("2006"), time.Now().Format("01"), time.Now().Format("02"), tutil.NewOid().String(), objectFileName)
+	objectKeyFileName := tutil.NewOid().String() + "." + fileExt
+	objectKey := path.Join("uploads", time.Now().Format("2006-01-02"), objectKeyFileName)
 
-	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, objectFileName, fileHeader)
+	sha256Value, errx := lib.UploadAwsS3File(ctx, bucketName, objectKey, fileHeader)
 	if errx != nil {
 		errMsg := tlog.E(ctx).Err(errx).Msgf("Upload file (user id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file size: %d) err (upload aws s3 file %v)",
 			userId, bucketName, objectKey, originFileName, mimeType, fileHeader.Size, errx)
@@ -68,6 +68,14 @@ func UploadFile(ctx context.Context, userId string, fileHeader *multipart.FileHe
 		errMsg := tlog.E(ctx).Err(errx).Msgf("Upload file (user id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file size: %d, sha256: %s) err (db create file object %v)",
 			userId, bucketName, objectKey, originFileName, mimeType, fileHeader.Size, sha256Value, errx)
 		errx.AttachErrMsg(errMsg)
+
+		errx2 := lib.DeleteAwsS3Object(ctx, bucketName, objectKey)
+		if errx2 != nil {
+			errMsg = tlog.E(ctx).Err(errx2).Msgf("Upload file (user id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file size: %d, sha256: %s) err (delete aws s3 object %v)",
+				userId, bucketName, objectKey, originFileName, mimeType, fileHeader.Size, sha256Value, errx2)
+			errx2.AttachErrMsg(errMsg)
+			errx.AttachErrMsg(errMsg)
+		}
 
 		return nil, errx
 	}

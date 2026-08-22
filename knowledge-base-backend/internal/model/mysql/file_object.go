@@ -8,7 +8,6 @@ import (
 	"github.com/choveylee/terror"
 	"github.com/choveylee/tlog"
 	"github.com/choveylee/tutil"
-	"gorm.io/gorm"
 
 	constant "dev.choveylee.top/knowledge-base-backend/internal/const"
 )
@@ -83,41 +82,6 @@ func CreateFileObject(ctx context.Context, bucketName, objectKey string, fileNam
 	return fileObjectDB, nil
 }
 
-func CreateFileObjectTx(ctx context.Context, tx *gorm.DB, bucketName, objectKey string, fileName, mimeType, fileExt string, sizeBytes uint64, sha256Value string, storageProvider int) (*FileObject, *terror.Terror) {
-	fileObjectId := tutil.NewOid().String()
-	if strings.TrimSpace(objectKey) == "" {
-		objectKey = "pending/" + fileObjectId
-	}
-
-	fileObjectDB := &FileObject{
-		Id: fileObjectId,
-
-		BucketName: bucketName,
-		ObjectKey:  objectKey,
-
-		FileName: fileName,
-		MimeType: mimeType,
-		FileExt:  fileExt,
-
-		SizeBytes: sizeBytes,
-		Sha256:    sha256Value,
-
-		StorageProvider: storageProvider,
-	}
-
-	retGorm := tx.Create(fileObjectDB)
-	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Create file object tx (id: %s, bucket: %s, object key: %s, file name: %s, mime type: %s, file ext: %s, size bytes: %d, sha256: %s, storage provider: %d) err (db create %v)",
-			fileObjectDB.Id, bucketName, fileObjectDB.ObjectKey, fileName, mimeType, fileExt, sizeBytes, sha256Value, storageProvider, retGorm.Error)
-
-		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
-
-		return nil, errx
-	}
-
-	return fileObjectDB, nil
-}
-
 func FindFileObject(ctx context.Context, fileObjectId string) (*FileObject, *terror.Terror) {
 	fileObjectsDB := make([]*FileObject, 0)
 
@@ -136,25 +100,4 @@ func FindFileObject(ctx context.Context, fileObjectId string) (*FileObject, *ter
 	}
 
 	return fileObjectsDB[0], nil
-}
-
-func UpdateFileObjectStorageInfoTx(ctx context.Context, tx *gorm.DB, fileObjectId, objectKey, sha256Value string) *terror.Terror {
-	params := map[string]any{
-		"object_key": objectKey,
-		"sha256":     sha256Value,
-
-		"updated_at": time.Now(),
-	}
-
-	retGorm := tx.Model(&FileObject{}).Where("id = ?", fileObjectId).Updates(params)
-	if retGorm.Error != nil {
-		errMsg := tlog.E(ctx).Err(retGorm.Error).Msgf("Update file object storage info tx (id: %s, object key: %s, sha256: %s) err (db updates %v)",
-			fileObjectId, objectKey, sha256Value, retGorm.Error)
-
-		errx := terror.NewTerror(ctx, retGorm.Error, constant.ErrorCodeMysqlServerAbnormal, errMsg)
-
-		return errx
-	}
-
-	return nil
 }

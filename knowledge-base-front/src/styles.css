@@ -236,6 +236,11 @@ button:disabled {
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
+  align-items: start;
+}
+
+.document-table-panel {
+  align-content: start;
 }
 
 .table-wrap {

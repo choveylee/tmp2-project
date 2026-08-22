@@ -48,6 +48,7 @@ var (
 	ErrorCodeObjectStorageUploadFailed   = register(100203, "对象存储上传失败")
 	ErrorCodeObjectStorageDownloadFailed = register(100204, "对象存储下载失败")
 	ErrorCodeDocumentParseFailed         = register(100205, "文档解析失败")
+	ErrorCodeObjectStorageDeleteFailed   = register(100206, "对象存储删除失败")
 )
 
 // StatusCode returns the HTTP status code mapped to errCode.
@@ -80,7 +81,7 @@ func StatusCode(errCode int) int {
 	case ErrorCodeDocumentNotFound, ErrorCodeDocumentFileInvalid:
 		return http.StatusBadRequest
 
-	case ErrorCodeObjectStorageUploadFailed, ErrorCodeObjectStorageDownloadFailed, ErrorCodeDocumentParseFailed:
+	case ErrorCodeObjectStorageUploadFailed, ErrorCodeObjectStorageDownloadFailed, ErrorCodeObjectStorageDeleteFailed, ErrorCodeDocumentParseFailed:
 		return http.StatusInternalServerError
 
 	default:

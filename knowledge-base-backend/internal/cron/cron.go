@@ -26,7 +26,7 @@ var (
 func InitCron(ctx context.Context) *terror.Terror {
 	testSyncCron = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("TEST_SYNC_CRON"), ""))
 
-	ingestJobCron = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("INGEST_JOB_CRON"), "0 */5 * * * *"))
+	ingestJobCron = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("INGEST_JOB_CRON"), ""))
 
 	ingestJobWorkerName = strings.TrimSpace(tcfg.DefaultString(tcfg.LocalKey("INGEST_JOB_WORKER_NAME"), "knowledge-base-ingest-worker"))
 	if ingestJobWorkerName == "" {

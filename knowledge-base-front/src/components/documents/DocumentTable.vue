@@ -21,7 +21,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <section class="panel stack">
+  <section class="panel stack document-table-panel">
     <div class="section-head">
       <div>
         <h3 class="section-title">Documents</h3>
